@@ -1,0 +1,16 @@
+id;ref;description;colour;text_colour
+6233646;1;Intra-Muros <> Gares <> Saint-Servan <> La Madeleine;#e30513;#ffffff
+6233651;2;La Madeleine <> Découverte <> Gares <> Intra-Muros;#0069b4;#ffffff
+6233652;3;Intra-Muros <> Gares <> Aristide Briand <> Gambetta <> Paramé <> Croix Désilles;#95c1ce;#ffffff
+6233653;4;Château-Malo <> Grassinais <> La Madeleine <> Bellevue <> Saint-Servan <> Gares <> Courtoisville <> Paramé <> IUT <> Rôthéneuf;#a61580;#ffffff
+6233654;5;Cancale <> Saint-Coulomb <> Croix Désilles <> Paramé<> Espérance <> Gares <> Hôpital <> Marne <> Bellevue <> Guymauvière <> ZI Sud <> La Madeleine <> Saint-Jouan-des-Guérêts;#2dafe5;#ffffff
+6233655;6;Porte de Dinan <> Saint-Servan <> Alet <> Rosais <> Doutreleau <> Flourie <> Quelmer;#009993;#ffffff
+6233656;7;Briantais <> La Flaudaie <> Place du Manoir <> Découverte <> Petit Paramé <> Paramé <> Saint-Ideuc <> La Haize;#ffdd00;#ffffff
+6233657;8 Hiver;Intra-Muros <> Sillon <> Courtoisville <> Kennedy <> Rôthéneuf;#f39200;#ffffff
+6233658;8 Été;Intra-Muros <> Sillon <> Courtoisville <> Rothéneuf <> La Guimorais <> Fort du Guesclin <> Pointe du Grouin <> Cancale Poste / Eglise <> Port de la Houle <> Saint-Méloir-des-Ondes;#f39200;#ffffff
+6233659;9;Gares <> ZI Sud <> Clinique <> Saint-Méloir-des-Ondes <> La Gouesnière <> Saint-Père-Marc-en-Poulet <> Saint-Jouan-des-Guérêts <> ZAC Atalante <> La Madeleine <> Place du Manoir <> Bellevue <> Hôpital <> Gares;#ff65ff;#ffffff
+6233647;10;Le Tronchet <> Miniac-Morvan <> Actipôle <> Châteauneuf-d’Ille-et-Vilaine <> Aquarium <> Balue <> Marne <> Gares;#b26500;#ffffff
+6233648;11;Saint-Père-Marc-en-Poulet <> Saint-Guinoux <> Lillemer <> La Fresnais <> Hirel <> Saint-Benoit-des-Ondes <> Saint-Méloir-des-Ondes <> Paramé;#6f6fff;#ffffff
+6233649;12;Plerguer <> Châteauneuf d'Ille-et-Vilaine <> La Ville-es-Nonais <> Saint-Suliac <> Launay Breton;#009640;#ffffff
+6233650;13 Hiver;Cancale Port Mer <> Cancale La Poste / Eglise <> Cancale Port de la Houle <> Saint-Méloir-des-Ondes <> Saint-Méloir Gare La Gouesnière;#b5a918;#ffffff
+8467368;P+R;Navette Parking Paul Féval;#005ca1;#ffffff

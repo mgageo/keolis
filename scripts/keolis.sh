@@ -845,7 +845,7 @@ EOF
   ls -1 scripts/keolis*.R >> /tmp/git.lst
   ls -1 scripts/keolis*.pl >> /tmp/git.lst
   ls -1 scripts/Transport*.pm>> /tmp/git.lst
-  ls -1 TRANSPORT/RMAT/*.txt
+  ls -1 TRANSPORT/RMAT/*.txt>> /tmp/git.lst
   cat  <<'EOF' > /tmp/README.md
 # keolis : OpenStreetMap et réseaux de transport bus en Ille-et-Vilaine
 

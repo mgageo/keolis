@@ -1,0 +1,30 @@
+id;ref:network;ref;name;description;from;to
+6230932;1-A;1;Réseau MAT Ligne 1-A;Intra-Muros <> Gares <> Saint-Servan <> La Madeleine;Intra-Muros;La Madeleine
+6230958;1-B;1;Réseau MAT Ligne 1-B;Intra-Muros <> Gares <> Saint-Servan <> La Madeleine;La Madeleine;Intra-Muros
+6231002;2-A;2;Réseau MAT Ligne 2-A;La Madeleine <> Découverte <> Gares <> Intra-Muros;Intra-Muros;La Madeleine
+6231001;2-B;2;Réseau MAT Ligne 2-B;La Madeleine <> Découverte <> Gares <> Intra-Muross;La Madeleine;Intra-Muros
+6231064;3-A;3;Réseau MAT Ligne 3-A;Intra-Muros <> Gares <> Aristide Briand <> Gambetta <> Paramé <> Croix Désilles;Intra-Muros;Croix Désilles
+6231197;3-B;3;Réseau MAT Ligne 3-B;Intra-Muros <> Gares <> Aristide Briand <> Gambetta <> Paramé <> Croix Désilles;Croix Désilles;Intra-Muros
+6232493;4-A;4;Réseau MAT Ligne 4-A;Château-Malo <> Grassinais <> La Madeleine <> Bellevue <> Saint-Servan <> Gares <> Courtoisville <> Paramé <> IUT <> Rôthéneuf;Château-Malo;Rothéneuf
+6232494;4-B;4;Réseau MAT Ligne 4-B;Château-Malo <> Grassinais <> La Madeleine <> Bellevue <> Saint-Servan <> Gares <> Courtoisville <> Paramé <> IUT <> Rôthéneuf;Rothéneuf;Château-Malo
+6231230;5-A;5;Réseau MAT Ligne 5-A;Cancale <> Saint-Coulomb <> Croix Désilles <> Paramé <> Espérance <> Gares <> Hôpital <> Marne <> Bellevue <> Guymauvière <> ZI Sud <> La Madeleine <> Saint-Jouan-des-Guérêts;Cancale;Saint-Jouan
+6231273;5-B;5;Réseau MAT Ligne 5-B;Cancale <> Saint-Coulomb <> Croix Désilles <> Paramé <> Espérance <> Gares <> Hôpital <> Marne <> Bellevue <> Guymauvière <> ZI Sud <> La Madeleine <> Saint-Jouan-des-Guérêts;Saint-Jouan;Cancale
+6231329;6-A;6;Réseau MAT Ligne 6-A;Porte de Dinan <> Saint-Servan <> Alet <> Rosais <> Doutreleau <> Flourie <> Quelmer;Gares;La Passagère
+6231330;6-B;6;Réseau MAT Ligne 6-B;Porte de Dinan <> Saint-Servan <> Alet <> Rosais <> Doutreleau <> Flourie <> Quelmer;La Passagère;Gares
+6231407;7-A;7;Réseau MAT Ligne 7-A;Briantais <> La Flaudaie <> Place du Manoir <> Découverte <> Petit Paramé <> Paramé <> Saint-Ideuc <> La Haize;Briantais;La Haize
+6231410;7-B;7;Réseau MAT Ligne 7-B;Briantais <> La Flaudaie <> Place du Manoir <> Découverte <> Petit Paramé <> Paramé <> Saint-Ideuc <> La Haize;La Haize;Briantais
+2008995;8 Été-A;8 Été;Réseau MAT Ligne 8 Été-A;Intra-Muros <> Sillon <> Courtoisville <> Rôthéneuf <> La Guimorais <> Fort du Guesclin <> Pointe du Grouin <> Cancale Eglise / Poste <> Cancale Port de la Houle <> Saint-Méloir-des-Ondes;Intra-Muros;Saint-Méloir-des-Ondes
+8447182;8 Été-B;8 Été;Réseau MAT Ligne 8 Été-B;Intra-Muros <> Sillon <> Courtoisville <> Rôthéneuf <> La Guimorais <> Fort du Guesclin <> Pointe du Grouin <> Cancale Eglise / Poste <> Cancale Port de la Houle <> Saint-Méloir-des-Ondes;Saint-Méloir-des-Ondes;Intra-Muros
+6231420;8 Hiver-A;8 Hiver;Réseau MAT Ligne 8 Hiver-A;Intra-Muros <> Sillon <> Courtoisville <> Kennedy <> Rôthéneuf;Intra-Muros;Rothéneuf
+6231421;8 Hiver-B;8 Hiver;Réseau MAT Ligne 8 Hiver-B;Intra-Muros <> Sillon <> Courtoisville <> Kennedy <> Rôthéneuf;Rothéneuf;Intra-Muros
+5282882;9-A;9;Réseau MAT Ligne 9-A;Gares <> ZI Sud <> Clinique <> Saint-Méloir-des-Ondes <> La Gouesnière <> Saint-Père-Marc-en-Poulet <> Saint-Jouan-des-Guérêts <> ZAC Atalante <> La Madeleine <> Place du Manoir <> Bellevue <> Hôpital <> Gares;Gares;Gares
+8446731;9-B;9;Réseau MAT Ligne 9-B;Gares <> ZI Sud <> Clinique <> Saint-Méloir-des-Ondes <> La Gouesnière <> Saint-Père-Marc-en-Poulet <> Saint-Jouan-des-Guérêts <> ZAC Atalante <> La Madeleine <> Place du Manoir <> Bellevue <> Hôpital <> Gares;Gares;Gares
+5288047;10-A;10;Réseau MAT Ligne 10-A;Le Tronchet <> Miniac-Morvan <> Actipôle <> Châteauneuf-d’Ille-et-Vilaine <> Aquarium <> Balue <> Marne <> Gares;Le Tronchet;Gares
+8446018;10-B;10;Réseau MAT Ligne 10-B;Le Tronchet <> Miniac-Morvan <> Actipôle <> Châteauneuf-d’Ille-et-Vilaine <> Aquarium <> Balue <> Marne <> Gares;Gares;Le Tronchet
+6231449;11-A;11;Réseau MAT Ligne 11-A;Saint-Père-Marc-en-Poulet <> Saint-Guinoux <> Lillemer <> La Fresnais <> Hirel <> Saint-Benoit-des-Ondes <> Saint-Méloir-des-Ondes <> Paramé;Saint-Père;Paramé Mairie
+6232479;11-B;11;Réseau MAT Ligne 11-B;Saint-Père-Marc-en-Poulet <> Saint-Guinoux <> Lillemer <> La Fresnais <> Hirel <> Saint-Benoit-des-Ondes <> Saint-Méloir-des-Ondes <> Paramé;Paramé Mairie;Saint-Père
+6232485;12-A;12;Réseau MAT Ligne 12-A;Plerguer <> Châteauneuf d’Ille-et-Vilaine <> La Ville-es-Nonais <> Saint-Suliac <> Launay Breton;Launay Breton;Plerguer
+6232486;12-B;12;Réseau MAT Ligne 12-B;Plerguer <> Châteauneuf d’Ille-et-Vilaine <> La Ville-es-Nonais <> Saint-Suliac <> Launay Breton;Plerguer;Launay Breton
+6232488;13 Hiver-A;13 Hiver;Réseau MAT Ligne 13 Hiver-A;St-Méloir Gare La Gouesnière <> Saint-Méloir-des-Ondes <> Cancale Port Mer;Cancale Port Mer;Saint-Méloir Gare la Gouesnière
+6232489;13 Hiver-B;13 Hiver;Réseau MAT Ligne 13 Hiver-B;St-Méloir Gare La Gouesnière <> Saint-Méloir-des-Ondes <> Cancale Port Mer;Saint-Méloir Gare la Gouesnière;Cancale Port Mer
+2087486;P+R;P+R;Réseau MAT Navette Parking Paul Féval;Parking Paul Féval;Intra-Muros
