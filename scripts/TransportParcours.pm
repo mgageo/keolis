@@ -77,7 +77,8 @@ sub parcours_ref_v2 {
   my $table = 'star_parcours';
   $table = 'shapes2routes';
   my $network = $self->{network};
-  my $hash = $self->{oOAPI}->osm_get("relation[network='${network}'][type=route][route=bus];>>;out meta;", "$self->{cfgDir}/relation_routes_bus.osm");
+#  my $hash = $self->{oOAPI}->osm_get("relation[network='${network}'][type=route][route=bus];>>;out meta;", "$self->{cfgDir}/relation_routes_bus.osm");
+  my $hash = $self->{oOAPI}->osm_get("relation[network='${network}'][type=route][route=bus]['ref:FR:STAR'!~'0'];>>;out meta;", "$self->{cfgDir}/relation_routes_bus.osm");
   $self->parcours_get_v2($table);
   my $osm = '';
   foreach my $relation (@{$hash->{relation}}) {
@@ -114,10 +115,10 @@ sub parcours_ref_v2 {
 #      next;
     }
     if ( $tags->{ref} =~ /^T/ ) {
-      next;
+#      next;
     }
     if ( $tags->{ref} =~ /^2\d\d/ ) {
-      next;
+#      next;
     }
     if ( $tags->{'ref:FR:STAR'} =~ /^\d+\-[AB]/ ) {
       warn sprintf("*** ref %s %s", $tags->{'ref:FR:STAR'}, $tags->{'description'});
@@ -129,7 +130,7 @@ sub parcours_ref_v2 {
 #      next;
     }
 
-    warn sprintf("%s %s from:%s to:%s id:%s", $tags->{'ref'}, $tags->{'description'}, $tags->{'from'}, $tags->{'to'}, $relation->{'id'});
+    warn sprintf("%s %s from:%s to:%s id: r%s", $tags->{'ref'}, $tags->{'description'}, $tags->{'from'}, $tags->{'to'}, $relation->{'id'});
     warn sprintf("ref %s from : % s to : %s", $tags->{'ref:FR:STAR'}, $relation->{nodes}[0], $relation->{nodes}[-1]);
     warn sprintf("ref %s from : % s to : %s", $tags->{'ref:FR:STAR'}, $node_from->{'tags'}->{'ref:FR:STAR'}, $node_to->{'tags'}->{'ref:FR:STAR'});
     warn sprintf("ref %s from : % s to : %s", $tags->{'ref:FR:STAR'}, $node_from->{'tags'}->{'name'}, $node_to->{'tags'}->{'name'});
@@ -138,7 +139,7 @@ sub parcours_ref_v2 {
         next;
       }
 #      warn Dumper $row;
-      warn sprintf("\t%s %s from:%s to:%s", $row->{'shape_id'}, $row->{'route_long_name'}, $row->{'depart_name'}, $row->{'arrivee_name'});
+      warn sprintf("\tref:FR:STAR=%s from:%s to:%s", $row->{'shape_id'}, $row->{'depart_name'}, $row->{'arrivee_name'});
 #      confess;
       if ( $tags->{'node_from'} ne $row->{'depart_id'} ) {
         next;

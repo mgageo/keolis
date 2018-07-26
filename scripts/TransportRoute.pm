@@ -1141,7 +1141,8 @@ sub wiki_routes {
   warn "wiki_routes() debut";
 #  $self->ksma_masters();
 #  my $hash = $self->oapi_get("area[name='Saint-Malo'];(relation[network!~'fr_'][type=route][route=bus](area));out meta;", "$self->{cfgDir}/route_vide.osm");
-  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route][route=bus];out meta;", "$self->{cfgDir}/network_wiki.osm");
+#  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route][route=bus];out meta;", "$self->{cfgDir}/network_wiki.osm");
+  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route_master][route_master=bus];out meta;", "$self->{cfgDir}/network_wiki.osm");
   my $wiki = <<'EOF';
 {|class="wikitable sortable"
 |-
@@ -1301,8 +1302,19 @@ sub routes_shapes_diff {
       $ok = '***';
     }
     printf("%-30s %d %s %s %s\n", $shape_id, $nb, $type, $ok, $s);
-    if ( $nb == 1 && $type ne "") {
-#      warn "=== $shape_id " . $relation->{id};
+    if ( $nb == 1 && $s eq "ko" && $type ne "") {
+      $self->{shape} = $shape_id;
+      $self->route_shape_stops();
+    }
+    if ( $nb == 1 && $s eq "ko" && $type ne "") {
+      warn "*** pb stops type:$type $shape_id " . $relation->{id};
+      warn "gtfs : " . $shapes->{$shape_id}->{star}->{stops};
+      warn "osm  : " . $shapes->{$shape_id}->{osm}->{stops};
+#      confess Dumper $shapes->{$shape_id};
+      if ( $shapes->{$shape_id}->{star}->{stops} =~ m{^08\d+} ) {
+        $self->{shape} = $shape_id;
+        $self->route_shape_stops();
+      }
 #       $self->route_shape_tags($relation, $shapes->{$shape_id}->{star});
     }
     if ( $nb == 1 && $s eq "ko" && $type eq "") {
@@ -1526,8 +1538,7 @@ sub route_shape_stops {
     warn Dumper $tags;
     confess;
   }
-  $self->route_shape_tags($relation,  $shapes->{$self->{shape}});
-  return;
+#  $self->route_shape_tags($relation,  $shapes->{$self->{shape}});  return;
   my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
   $relation_osm = $self->{oOSM}->delete_osm($relation_osm);
   if ($tags->{'ref:FR:STAR'} ne $self->{shape} ) {
@@ -1659,5 +1670,59 @@ sub route_creer {
   $osm = $self->{oOSM}->modify_tags($osm, $tags, keys %{$tags}) . "\n";
   warn $osm;
   $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'create');
+}
+# pour mettre à jour les tags
+sub routes_tags_maj {
+  my $self = shift;
+  warn "routes_tags_maj() début";
+#  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route][route=bus];out meta;", "$self->{cfgDir}/routes_tags_maj.osm");
+  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route_master][route_master=bus];out meta;", "$self->{cfgDir}/routes_tags_maj.osm");
+  my $osm = '';
+  my $nb_osm = 0;
+  my $tags = {
+    'public_transport:version' => '2',
+    'website' => 'https://www.reseau-mat.fr/',
+    'operator' => 'Keolis Saint-Malo',
+    'source' => $self->{source}
+  };
+  my %tags;
+  for my $relation ( @{$hash->{relation}} ) {
+    my $nb_deleted = 0;
+    my $nb_absent = 0;
+    my $nb_diff = 0;
+    for my $tag ( keys %{$relation->{tags}} ) {
+      $tags{$tag}++;
+    }
+    for my $tag ( keys %{$tags} ) {
+      if ( not defined $relation->{tags}->{$tag} ) {
+        warn "routes_tags_maj() absent $relation->{id} tag:$tag";
+#        warn Dumper $relation;
+        $nb_absent++;
+        next;
+      }
+      if ( $relation->{tags}->{$tag} != $tags->{$tag} ) {
+        warn "routes_tags_maj() diff $relation->{id} tag:$tag";
+#        warn Dumper $relation;
+        $nb_diff++;
+        next;
+      }
+    }
+    if ($nb_absent == 0 && $nb_diff == 0) {
+      next;
+    }
+    warn "routes_tags_maj() $relation->{id}  absent $nb_absent == 0 diff $nb_diff == 0";
+    $nb_osm++;
+    my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
+    $relation_osm = $self->{oOSM}->modify_tags($relation_osm, $tags, keys %{$tags});
+#    confess $relation_osm;
+    $osm .= $relation_osm . "\n";
+#    last;
+    if ( $nb_osm > 10 ) {
+#      last;
+    }
+#    confess Dumper $osm;
+  }
+  $self->{oAPI}->changeset($osm, $self->{osm_commentaire} . " mise a jour des tags", 'modify');
+  warn "routes_tags_maj() fin $nb_osm";
 }
 1;

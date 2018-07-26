@@ -34,6 +34,53 @@ sub liste_routes_master {
     warn "liste_routes_master() ref:" . $relation->{tags}->{ref} . " id: " . $relation->{id} . " nb_routes:" . scalar(@routes) . " nb_disuseds:" . scalar(@lines);
   }
 }
+#
+# pour supprimer les lignes sans ref:FR:STAR
+sub routes_master_supprime {
+  my $self = shift;
+  warn "routes_master_supprime()";
+  my $network = $self->{network};
+  my $hash_route_master = $self->{oOAPI}->osm_get("relation[network='${network}'][type=route_master];out meta;", "$self->{cfgDir}/relation_routes_master.osm");
+  my $hash_route =  $self->{oOAPI}->osm_get("relation[network='${network}'][type=route][route=bus]['ref:FR:STAR'!~'0'];out meta;", "$self->{cfgDir}/relation_routes_bus.osm");
+  my (%supprime);
+  my $osm = '';
+  foreach my $relation (@{$hash_route->{relation}}) {
+    $supprime{$relation->{'id'}} = $relation;
+    $osm .= $self->{oOSM}->relation_delete($relation);
+  }
+  $self->{oAPI}->changeset($osm, "suppression anciennes routes sans ref:FR:STAR", 'delete');
+  confess $osm;
+#  confess Dumper \%supprime;
+#  return;
+  foreach my $relation (@{$hash_route_master->{relation}}) {
+    warn "routes_master_supprime ref:" . $relation->{tags}->{ref} . " " . $relation->{tags}->{'ref:FR:STAR'} . " id: " . $relation->{id};
+    my $members = $relation->{'member'};
+    my $osm_members = '';
+    my $ko = 0;
+    for my $member ( @{$members} ) {
+      if ( defined $supprime{$member->{ref}} ) {
+        my $r = $supprime{$member->{ref}};
+        warn "\t" . $r->{tags}->{ref} . " " . $r->{tags}->{'ref:FR:STAR'} . " id: " . $r->{id};
+        $ko++;
+        next;
+      }
+      warn "\t" . $member->{ref};
+      $osm_members = sprintf("%s<member type='relation' ref='%d' role=''/>\n",$osm_members, $member->{ref});
+#    warn $osm_members;
+    }
+    if ( $ko == 0 ) {
+      next;
+    }
+    warn $osm_members;
+    my $osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
+    $osm =  $self->{oOSM}->relation_replace_member($osm, '<member type="relation" ref="\d+" role=""/>', $osm_members);
+    $self->{oAPI}->changeset($osm, "suppression anciennes routes sans ref:FR:STAR", 'modify');
+
+#    confess Dumper \$relation;
+#    my @lines = get_relation_tag_ref($hash_disused, $relation->{tags}->{ref});
+#    warn "liste_routes_master() ref:" . $relation->{tags}->{ref} . " id: " . $relation->{id} . " nb_routes:" . scalar(@routes) . " nb_disuseds:" . scalar(@lines);
+  }
+}
 sub ref_routes_master {
   my $self = shift;
   warn "ref_routes_master()";
@@ -161,6 +208,51 @@ sub route_master_creer {
   $tags->{'source'} = $self->{source};
   $osm = $self->{oOSM}->modify_tags($osm, $tags, keys %{$tags}) . "\n";
   $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'create');
+}
+#
+# pour créer une relation "route_master" pour le réseau rmat
+sub route_master_creer_rmat {
+  my $self = shift;
+# 1;Intra-Muros <> Gares <> Saint-Servan <> La Madeleine
+# 2;La Madeleine <> Découverte <> Gares <> Intra-Muros
+
+my $lignes =<<EOF;
+3;Intra-Muros <> Gares <> Aristide Briand <> Gambetta <> Paramé <> Croix Désilles
+4;Château-Malo <> Grassinais <> La Madeleine <> Bellevue <> Saint-Servan <> Gares <> Courtoisville <> Paramé <> IUT <> Rôthéneuf
+5;Cancale <> Saint-Coulomb <> Croix Désilles <> Paramé<> Espérance <> Gares <> Hôpital <> Marne <> Bellevue <> Guymauvière <> ZI Sud <> La Madeleine <> Saint-Jouan-des-Guérêts
+6;Porte de Dinan <> Saint-Servan <> Alet <> Rosais <> Doutreleau <> Flourie <> Quelmer
+7;Briantais <> La Flaudaie <> Place du Manoir <> Découverte <> Petit Paramé <> Paramé <> Saint-Ideuc <> La Haize
+8;(hiver) Intra-Muros <> Sillon <> Courtoisville <> Kennedy <> Rôthéneuf
+8;(été) Intra-Muros <> Sillon <> Courtoisville <> Rothéneuf <> La Guimorais <> Fort du Guesclin <> Pointe du Grouin <> Cancale Poste / Eglise <> Port de la Houle <> Saint-Méloir-des-Ondes
+9;Gares <> ZI Sud <> Clinique <> Saint-Méloir-des-Ondes <> La Gouesnière <> Saint-Père-Marc-en-Poulet <> Saint-Jouan-des-Guérêts <> ZAC Atalante <> La Madeleine <> Place du Manoir <> Bellevue <> Hôpital <> Gares
+10;Le Tronchet <> Miniac-Morvan <> Actipôle <> Châteauneuf-d’Ille-et-Vilaine <> Aquarium <> Balue <> Marne <> Gares
+11;Saint-Père-Marc-en-Poulet <> Saint-Guinoux <> Lillemer <> La Fresnais <> Hirel <> Saint-Benoit-des-Ondes <> Saint-Méloir-des-Ondes <> Paramé
+12;Plerguer <> Châteauneuf d'Ille-et-Vilaine <> La Ville-es-Nonais <> Saint-Suliac <> Launay Breton
+13;(hiver) Cancale Port Mer <> Cancale La Poste / Eglise <> Cancale Port de la Houle <> Saint-Méloir-des-Ondes <> Saint-Méloir Gare La Gouesnière
+EOF
+  my @lignes = split(/\n/, $lignes);
+#  confess Dumper \@lignes;
+  my $osm_routes = '';
+  for my $ligne ( @lignes ) {
+    my ($nomcourt, $nomlong) = split(/;/, $ligne);
+#  confess Dumper  $lignes->{$self->{ref}};
+    $self->{relation_id}--;
+    my $osm = sprintf('
+  <relation id="%s" version="1"  changeset="1">
+    <tag k="route_master" v="bus"/>
+    <tag k="service" v="busway"/>
+    <tag k="type" v="route_master"/>
+  </relation>' , $self->{relation_id});
+    my $tags;
+    $tags->{network} = $self->{network};
+    $tags->{"public_transport:version"} =  "2";
+    $tags->{description} =   xml_escape($nomlong);
+    $tags->{name} =  "Bus Réseau MAT Ligne " . $nomcourt;
+    $tags->{'source'} = $self->{source};
+    $osm = $self->{oOSM}->modify_tags($osm, $tags, keys %{$tags}) . "\n";
+    $osm_routes .= $osm;
+  }
+  $self->{oAPI}->changeset($osm_routes, $self->{osm_commentaire}, 'create');
 }
 #
 # la comparaison avec le gtfs
@@ -308,6 +400,42 @@ sub valid_routes_master {
     } else {
       print "ok \n";
     }
+  }
+}
+#
+# pour les différentes lignes
+sub valid_routes_master_member {
+  my $self = shift;
+  my $network = $self->{network};
+  my $hash_route_master = $self->oapi_get("relation[network='${network}'][type=route_master][route_master=bus];out meta;", "$self->{cfgDir}/valid_route_master.osm");
+  my $hash_route = $self->oapi_get("relation[network='${network}'][type=route][route=bus];out meta;", "$self->{cfgDir}/valid_route.osm");
+  my $refs;
+  foreach my $relation (sort @{$hash_route->{relation}}) {
+    if ( ! $relation->{tags}->{ref} ) {
+      confess;
+    }
+    warn "valid_routes_master_member() route r" . $relation->{id} . " ref: " . $relation->{tags}->{ref};
+    my $ref = $relation->{tags}->{ref};
+    $ref =~ s{\-.$}{};
+    push @{$refs->{$ref}}, $relation->{id};
+  }
+  foreach my $relation (sort @{$hash_route_master->{relation}}) {
+    if ( ! $relation->{tags}->{ref} ) {
+      confess;
+    }
+    warn "valid_routes_master_member() master r" . $relation->{id} . " ref: " . $relation->{tags}->{ref};
+    if ( ! defined $refs->{$relation->{tags}->{ref}} ) {
+      confess;
+    }
+    my $osm_member = '';
+    my $ref = $relation->{tags}->{ref};
+    for my $r ( @{$refs->{$ref}} ) {
+#    confess Dumper $relation;
+      $osm_member .= '  <member type="relation" ref="' . $r . '" role=""/>' . "\n";
+    }
+    my $osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
+    $osm =  $self->{oOSM}->relation_replace_member($osm, '<member type="relation" ref="\d+" role=""/>', $osm_member);
+    $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'modify');
   }
 }
 # pour une ligne
@@ -694,5 +822,65 @@ sub valid_routes_master_wfs {
     }
 #    last;
   }
+}
+#
+# générer le code wiki d'un réseau, version ksma
+sub wiki_routes_master {
+  my $self = shift;
+  warn "wiki_routes_master() debut";
+  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route_master]['route_master'='bus'];out meta;", "$self->{cfgDir}/wiki_routes_master.osm");
+  my $wiki = <<'EOF';
+{|class="wikitable sortable"
+|-
+!scope="col"| Ligne
+!scope="col" class="unsortable"| Nom
+!scope="col" class="unsortable"| Statut
+!scope="col" class="unsortable"| Liens
+!scope="col" class="unsortable"| Notes
+EOF
+  foreach my $relation (sort tri_tags_ref @{$hash->{relation}}) {
+    @{$relation->{nodes}} = ();
+    @{$relation->{ways}} = ();
+    my $nb_nodes = 0;
+    my $nb_ways = 0;
+# vérification du type des "member"
+    for my $member ( @{$relation->{member}} ) {
+      if ( $member->{type} eq 'node' ) {
+        push @{$relation->{nodes}}, $member->{ref};
+        $nb_nodes++;
+        next;
+      };
+      if ( $member->{type} eq 'way' ) {
+        push @{$relation->{ways}}, $member->{ref};
+        next;
+      };
+    }
+    if ( $self->{DEBUG} > 0 ) {
+      warn sprintf("wiki_routes() r%s ;ref:%s;%s;%s;%s;%s", $relation->{id}, $relation->{tags}->{ref}, $relation->{user}, $relation->{timestamp}, scalar(@{$relation->{nodes}}), scalar(@{$relation->{ways}}));
+    }
+    my $id = $relation->{id};
+    my $ref = $relation->{tags}->{ref};
+#    my $ref_network = $relation->{tags}->{'ref:ksma'};
+#    if ( $ref_network !~ m{\-[ABCD]$} ) {
+#      next;
+#    }
+    my $network = $relation->{tags}->{network};
+    my $to = $relation->{tags}->{to};
+    my $name = $relation->{tags}->{name};
+    my $fg = $relation->{tags}->{colour};
+    my $bg = $relation->{tags}->{bgcolor};
+    $wiki .= <<EOF;
+|-
+!scope="row"| {{Sketch Line|$ref|$network|bg=$bg|fg=$fg}}
+| $name
+| {{Relation|$id| $name}}
+| ||
+EOF
+  }
+  $wiki .= <<EOF;
+|}
+EOF
+  warn "wiki_routes_master() fin";
+  print $wiki;
 }
 1;

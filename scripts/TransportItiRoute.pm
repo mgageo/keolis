@@ -37,17 +37,22 @@ sub valid_routes_ways {
 #    confess Dumper \@id;
   }
   my $nb_ko = 0;
+  my $nb_ko_stop = 0;
   my $refs = '';
   my $level0 = '';
+  my $refs = '';
+  my $josm = '';
   for my $id ( sort {$a->{ref} cmp $b->{ref} } @id ) {
 #    confess Dumper $id;
     $self->{tags} = $id;
     $self->{id} = $id->{id};
     my $rc = $self->valid_relation_ways();
     $nb_ko += $rc->{nb_ko};
+    $nb_ko_stop += $rc->{nb_ko_stop};
     if ( $rc->{nb_ko} > 0 ) {
       $refs .= "$self->{ref} ";
       $level0 .= "r" . $id->{id} . ",";
+      $josm .= "r" . $id->{id} . " ";
     }
 #    $self->relation_bus_stop();
     if ( $rc->{nb_ko} == 0 ) {
@@ -58,8 +63,9 @@ sub valid_routes_ways {
   warn <<EOF;
 ***************************
 valid_routes_ways fin $network
-nb_ko: $nb_ko refs: $refs
+nb_ko: $nb_ko nb_ko_stop: $nb_ko_stop refs: $refs
 level0: $level0
+josm: $josm
 ***************************
 EOF
 }
@@ -81,6 +87,7 @@ sub valid_relation_ways {
   warn "\n=========\nvalid_relation_ways debut network:$network id:$id ref:$ref tag_ref:$tag_ref tag:$tag\n";
 #  confess Dumper $self->{'tags'}->{'tags'};
   my $nb_ko = 0;
+  my $nb_ko_stop = 0;
   $self->get_relation_ways_nodes();
   my $nodes = $self->{nodes};
   my $ways = $self->{ways};
@@ -121,7 +128,7 @@ sub valid_relation_ways {
       }
 #      confess Dumper $nodes->{$n};
       warn "\tnode role#stop|platform " . $member->{role} . " tags " . $nodes->{$n}->{tags}->{highway} . " " . $nodes->{$n}->{tags}->{name};
-      $nb_ko++;
+      $nb_ko_stop++;
     };
 #    exit;
     if ( $member->{type} eq 'way' ) {
@@ -159,7 +166,7 @@ sub valid_relation_ways {
     };
   }
   warn "\nvalid_relation_ways fin network:$network tag:$tag id:$id ref:$ref\nnb_ko:$nb_ko\n=========\n";
-  return { nb_ko => $nb_ko };
+  return { nb_ko => $nb_ko, nb_ko_stop => $nb_ko_stop };
 }
 
 #

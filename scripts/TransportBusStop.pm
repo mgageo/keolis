@@ -508,7 +508,7 @@ sub bus_stop {
   } else {
     warn "bus_stop() pas de nodes manquants";
   }
-#  return;
+  return;
 #
 # on ne conserve qu'un node par référence
 # =======================================
@@ -537,10 +537,10 @@ sub bus_stop {
       my $node = ${$stops->{$ref}->{osm}}[0];
 #      confess Dumper $node;
       if ( $node->{'user'} !~ m{(mga_geo|Verdy_p)} ) {
-        next;
+#        next;
       }
       my $d = haversine_distance_meters($node->{lat}, $node->{lon}, $stop->{stop_lat}, $stop->{stop_lon});
-      if ( $ref =~ m{^_1553$} or $d > 5 ) {
+      if ( $d > 25 ) {
         warn "bus_stop() n$node->{id} d: $d name: $stop->{stop_name}";
 #        confess Dumper $node;
         my $node_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'node', $node->{id}));
@@ -983,7 +983,7 @@ sub relation_bus_stop {
   warn "relation_bus_stop() début";
   my $id = $self->{id};
   $self->get_relation_ways_nodes();
-  my $hash = $self->oapi_get("rel($id);node(around:50)['highway'='bus_stop']['ref:fr_illenoo'];out meta;", "$self->{cfgDir}/relation_bus_stop_$id.osm");
+  my $hash = $self->oapi_get("rel($id);node(around:50)['highway'='bus_stop'];out meta;", "$self->{cfgDir}/relation_bus_stop_$id.osm");
   my $nodes;
   my $ways = $self->{ways};
   my $members = $self->{'osm'}->{'relation'}[0]->{'member'};
@@ -1034,6 +1034,7 @@ sub relation_bus_stop {
 #  confess Dumper $bus_stop;
 # on parcourt de nouveau les ways membres de la relation
   my $level0 = 'r' . $self->{id} . "\n";
+  my $osm_members = '';
   my $prev = '';
   my $nb_stops = 0;
   @{$self->{stops}} = ();
@@ -1056,12 +1057,19 @@ sub relation_bus_stop {
       }
       warn "relation_bus_stop() $node->{'id'}, $node->{'tags'}->{'name'}";
       $level0 .= "  nd $node->{'id'} platform\n";
+      $osm_members .= sprintf('  <member type="node" ref="%s" role="platform"/>' ."\n", $node->{id});
+
       $prev = $node;
       $nb_stops++;
       push @{$self->{stops}}, $node;
     }
   }
-  print $level0;
+#  print $level0;
+#  print $osm_members;
+  my $osm = get(sprintf("https://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $self->{'id'}));
+  $osm = $self->{oOSM}->relation_replace_member($osm, '<member type="node" ref="\d+" role="platform[^"]*"/>', $osm_members);
+#  print $osm;
+  $self->{oAPI}->changeset($osm, 'mise a jour des arrets', 'modify');
   warn "relation_bus_stop() fin nb_stops:$nb_stops";
 }
 sub bus_stop_35_tags {
@@ -1257,5 +1265,60 @@ sub bus_stop_proche {
       warn "nb:$nb n=>$n distance:" . $distance{$n};
     }
   }
+}
+# pour mettre à jour les tags
+sub bus_stop_tags_maj {
+  my $self = shift;
+  warn "routes_tags_maj() début";
+  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route][route=bus];>>;node._[highway=bus_stop];out meta;", "$self->{cfgDir}/bus_stop_tags_maj.osm");
+  my $osm = '';
+  my $nb_osm = 0;
+  my $tags = {
+    'public_transport:version' => '2',
+    'highway' => 'bus_stop',
+    'public_transport' => 'platform',
+    'website' => 'https://www.reseau-mat.fr/',
+    'operator' => 'Keolis Saint-Malo',
+    'source' => $self->{source}
+  };
+  my %tags;
+  for my $node ( @{$hash->{node}} ) {
+    my $nb_deleted = 0;
+    my $nb_absent = 0;
+    my $nb_diff = 0;
+    for my $tag ( keys %{$node->{tags}} ) {
+      $tags{$tag}++;
+    }
+    for my $tag ( keys %{$tags} ) {
+      if ( not defined $node->{tags}->{$tag} ) {
+        warn "routes_tags_maj() absent $node->{id} tag:$tag";
+#        warn Dumper $node;
+        $nb_absent++;
+        next;
+      }
+      if ( $node->{tags}->{$tag} != $tags->{$tag} ) {
+        warn "routes_tags_maj() diff $node->{id} tag:$tag";
+#        warn Dumper $node;
+        $nb_diff++;
+        next;
+      }
+    }
+    if ($nb_absent == 0 && $nb_diff == 0) {
+      next;
+    }
+    warn "bus_stop_tags_maj() $node->{id}  absent $nb_absent == 0 diff $nb_diff == 0";
+    $nb_osm++;
+    my $node_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'node', $node->{id}));
+    $node_osm = $self->{oOSM}->modify_tags($node_osm, $tags, keys %{$tags});
+#    confess $node_osm;
+    $osm .= $node_osm . "\n";
+#    last;
+    if ( $nb_osm > 10 ) {
+#      last;
+    }
+#    confess Dumper $osm;
+  }
+  $self->{oAPI}->changeset($osm, $self->{osm_commentaire} . " mise a jour des tags", 'modify');
+  warn "bus_stop_tags_maj() fin $nb_osm";
 }
 1;

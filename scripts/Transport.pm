@@ -227,6 +227,9 @@ sub osm2hash {
     SuppressEmpty => ''
   );
 #  warn Dumper($hash);
+  $hash->{osm}->{relation} = ();
+  $hash->{osm}->{way} = ();
+  $hash->{osm}->{node} = ();
   foreach my $relation (@{$hash->{relation}}) {
 #    confess Dumper $relation;
     foreach my $tag (@{$relation->{tag}}) {
@@ -234,6 +237,7 @@ sub osm2hash {
       $relation->{tags}->{$tag->{k}} = $tag->{v};
     }
     delete $relation->{tag};
+    $hash->{osm}->{relation}->{$relation->{id}} = $relation;
 #	confess Dumper $relation->{tags};
 #	last;
   }

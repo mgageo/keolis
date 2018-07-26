@@ -19,7 +19,7 @@ sub valid_network {
   my $self = shift;
   my $network = $self->{network};
   warn "valid_network() debut";
-  my $hash_network = $self->oapi_get("relation[network=${network}][type=network];out meta;", "$self->{cfgDir}/relation_network.osm");
+  my $hash_network = $self->oapi_get("relation[network='${network}'][type=network];out meta;", "$self->{cfgDir}/relation_network.osm");
 #  confess Dumper $hash_network;
 # une seule relation
   if ( scalar(@{$hash_network->{relation}}) != 1 ) {
@@ -28,8 +28,8 @@ sub valid_network {
   if ( not defined $hash_network->{relation}[0]->{member} ) {
     warn "valid_network() *** pas de member";
   }
-  my $hash_route_master = $self->oapi_get("relation[network=${network}][type=route_master];out meta;", "$self->{cfgDir}/relation_routes_master.osm");
-  my $hash_route = $self->oapi_get("relation[network=${network}][type=route][route=bus];out meta;", "$self->{cfgDir}/relation_routes_bus.osm");
+  my $hash_route_master = $self->oapi_get("relation[network='${network}'][type=route_master];out meta;", "$self->{cfgDir}/relation_routes_master.osm");
+  my $hash_route = $self->oapi_get("relation[network='${network}'][type=route][route=bus];out meta;", "$self->{cfgDir}/relation_routes_bus.osm");
 #  confess Dumper $hash_route_master;
   my $members;
 #  confess Dumper  @{$hash_network->{relation}[0]->{member}};
@@ -57,6 +57,7 @@ sub valid_network {
 # que si on a des routes avec cette référence
     my @routes = get_relation_tag_ref($hash_route, $relation->{tags}->{ref});
     if ( scalar(@routes) < 1 ) {
+     warn "valid_network() master sans route " . $relation->{tags}->{ref};
       next;
     }
     if ( not defined $members->{$relation->{id}} ) {

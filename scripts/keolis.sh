@@ -66,10 +66,13 @@ e() {
 EOF
   LOG "e fin"
 }
+#F STAR: les traitements pour le réseau star
 STAR() {
+  LOG "STAR debut"
   STAR_dl
   STAR_api
   STAR_db
+  LOG "STAR fin"
 }
 
 #F STAR_dl: récupération du réseau Star https://data.explore.star.fr/explore/dataset/tco-bus-topologie-pointsarret-td/export/
@@ -94,6 +97,7 @@ EOF
   LOG "STAR_dl fin VarDir: $VarDir"
   cp -pv $VarDir/tco-bus-topologie-parcours-td.geojson ../leaflet/exemples/star_parcours.geojson
   cp -pv $VarDir/tco-bus-topologie-pointsarret-td.geojson ../leaflet/exemples/star_pointsarret.geojson
+  LOG "STAR_dl fin"
 }
 #f _STAR_dl:
 _STAR_dl() {
@@ -190,7 +194,7 @@ STAR_db() {
   DB star_parcours_stops_lignes
   LOG "STAR_db fin"
 }
-#F KEOLIS_dl: récupération des données de Kéolis en format GTFS
+#f KEOLIS_dl: récupération des données de Kéolis en format GTFS
 KEOLIS_dl() {
   LOG "KEOLIS_dl debut"
   format=GTFS-20140626.zip
@@ -233,7 +237,7 @@ KEOLIS_dl() {
 # https://data.explore.star.fr/explore/dataset/tco-busmetro-horaires-gtfs-versions-td
 # http://ftp.keolis-rennes.com/opendata/tco-busmetro-horaires-gtfs-versions-td/attachments/GTFS_2016.9.4_2017-06-26_2017-07-09.zip
 #
-#F GTFS_dl: récupération des données de Kéolis en format GTFS sur le nouveau site
+#f GTFS_dl: récupération des données de Kéolis en format GTFS sur le nouveau site
 GTFS_dl() {
   LOG "GTFS_dl debut"
   version=20160921
@@ -802,9 +806,11 @@ JOUR() {
   PW 10
   LOG "JOUR fin"
 }
+#f _keolis:
 _keolis() {
   perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 0 --ref 77 star diff_routes
 }
+#f _reseaux:
 _reseaux() {
   while read reseau; do
     echo $reseau
@@ -827,7 +833,7 @@ GIT() {
   export Depot
   export Remote
   _git_lst
-  bash ../win32/scripts/git.sh INIT
+  bash ../win32/scripts/git.sh INIT $*
 #  bash ../win32/scripts/git.sh PUSH
   LOG "GIT fin"
 }

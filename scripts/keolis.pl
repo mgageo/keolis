@@ -43,7 +43,7 @@ use TransportParcours;
 use TransportRoute;
 use TransportRouteMaster;
 use TransportStopArea;
-use TransportKsma;
+use TransportRmat;
 use TransportVitre;
 use TransportChateaubourg;
 use TransportIllenoo;
@@ -173,7 +173,16 @@ perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 -- star valid_routes_ways
 #
 # le routage d'un itinéraire
 perl scripts/keolis.pl --DEBUG 0 --DEBUG_GET 1 --shape 0203-B-1663-1619 star osrm_get_parcours
-
+#
+# les arrêts d'une route
+perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 --id 6232486 rmat relation_bus_stop
+#
+# pour le Réseau Malo Agglomération Transport
+perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 rmat rmat_bus_stop_diff
+# les tags par rapport a TRANSPORT/RMAT/routes.txt
+perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 rmat rmat_routes_verif
+perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 rmat rmat_routes_liste
+perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 rmat stop_position_verif
 EOF
 
 }
@@ -209,8 +218,8 @@ sub _star {
     network => 'FR:STAR',
     operator => "Star",
     cfgDir => "TRANSPORT/STAR",
-    source => "http://data.keolis-rennes.com 04 novembre 2017",
-    osm_commentaire => 'maj novembre 2017',
+    source => "http://data.keolis-rennes.com 17 juin 2018",
+    osm_commentaire => 'maj juin 2018',
     k_route => "route",
     k_ref => 'ref:FR:STAR',
     tag_ref => '["ref:FR:STAR"]',
@@ -262,12 +271,13 @@ sub _ksma {
     tag_ref => '["ref:ksma"]',
     id => $id,
     network => "fr_ksma",
-    operator => "KSMA",
+    network_new => "FR:Réseau MAT",
+    operator => "Keolis Saint-Malo",
     cfgDir => "TRANSPORT/KSMA",
-    source => "Keolis Saint-Malo - Année 2016",
+    source => "Keolis Saint-Malo année 2016",
     overpassQL => 'relation[network=fr_ksma]["route"][ref="%s"];out meta;',
     k_route => "route",
-    osm_commentaire => 'maj juin 2016',
+    osm_commentaire => 'maj juilet 2018',
   };
   return $self;
 }
@@ -296,6 +306,33 @@ sub _surf {
     overpassQL => 'relation[network=fr_surf]["route"][ref="%s"];out meta;',
     k_route => "route",
     osm_commentaire => 'maj avril 2016',
+  };
+  return $self;
+}
+sub rmat {
+  my $oTransport = new Transport(&_rmat);
+  my $sp = 'valid_network';
+  if ( @_ ) {
+    $sp = shift @_;
+  } else {
+    $sp = $ssp;
+  }
+  $oTransport->$sp(@_);
+}
+sub _rmat {
+  my $self = {
+    DEBUG => $DEBUG,
+    DEBUG_GET => $DEBUG_GET,
+    ref => $ref,
+    tag_ref => '["ref"]',
+    id => $id,
+    network => "FR:Réseau MAT",
+    operator => "Keolis Saint-Malo",
+    cfgDir => "TRANSPORT/RMAT",
+    source => "Réseau MAT - juillet 2018",
+    overpassQL => 'relation[network=fr_ksma]["route"][ref="%s"];out meta;',
+    k_route => "route",
+    osm_commentaire => 'maj juilet 2018',
   };
   return $self;
 }
