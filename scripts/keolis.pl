@@ -47,6 +47,7 @@ use TransportRmat;
 use TransportVitre;
 use TransportChateaubourg;
 use TransportIllenoo;
+use TransportMobibreizh;
 our $cfgDir = 'KEOLIS';
 our $baseDir = getcwd;
 our $Drive = substr($baseDir,0,2);
@@ -326,13 +327,20 @@ sub _rmat {
     ref => $ref,
     tag_ref => '["ref"]',
     id => $id,
+    ligne => "Réseau MAT",
     network => "FR:Réseau MAT",
     operator => "Keolis Saint-Malo",
     cfgDir => "TRANSPORT/RMAT",
     source => "Réseau MAT - juillet 2018",
-    overpassQL => 'relation[network=fr_ksma]["route"][ref="%s"];out meta;',
+    overpassQL => 'relation[network="FR:Réseau MAT"]["route"][ref="%s"];out meta;',
     k_route => "route",
-    osm_commentaire => 'maj juilet 2018',
+    osm_commentaire => 'maj aout 2018',
+    tags => {
+      'network:wikidata' => 'Q3456743',
+      'operator' => "Keolis Saint-Malo",
+      'source' => "Réseau MAT - août 2018",
+      'website' => 'https://www.reseau-mat.fr/',
+    }
   };
   return $self;
 }

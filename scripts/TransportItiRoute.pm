@@ -12,6 +12,7 @@ use LWP::Simple;
 use XML::Simple;
 use Storable 'dclone';
 use GeoMisc;
+use Storable;
 #
 sub valid_routes_ways {
   my $self = shift;
@@ -19,6 +20,10 @@ sub valid_routes_ways {
   my $tag = $self->{'tag_ref'};
   my $requete = "rel[network='$network'][route=bus]$tag;out meta;";
   warn "valid_routes_ways() tag:$tag $requete";
+  my $dsn = "$self->{cfgDir}/relations.dmp";
+  if ( -f $dsn ) {
+    $self->{relations} = retrieve($dsn);
+  }
 #  my $osm = $self->{oOAPI}->osm_get("rel['ref:star'];out meta;", "$self->{cfgDir}/relation_routes.osm");
   my $osm = $self->{oOAPI}->osm_get($requete, "$self->{cfgDir}/relation_routes.osm");
   my ( @id );
@@ -26,6 +31,9 @@ sub valid_routes_ways {
     my $ref_network = $relation->{tags}->{'ref:ksma'};
     if ( $ref_network !~ m{7} ) {
 #      next;
+    }
+    if ( exists $self->{relations}->{$relation->{id}} ) {
+      next;
     }
 #    warn Dumper $r->{tags};
 #    push @id, $r->{tags}{$tag};
@@ -53,10 +61,14 @@ sub valid_routes_ways {
       $refs .= "$self->{ref} ";
       $level0 .= "r" . $id->{id} . ",";
       $josm .= "r" . $id->{id} . " ";
+#      confess;
+    } else {
+      $self->{relations}->{$self->{id}}++;
+      store( $self->{relations}, $dsn );
     }
 #    $self->relation_bus_stop();
     if ( $rc->{nb_ko} == 0 ) {
-      $self->gpx_relation_ways();
+#      $self->gpx_relation_ways();
     }
   }
   chop $level0;
@@ -151,8 +163,12 @@ sub valid_relation_ways {
             }
           }
         } else {
-          warn "w${w} " . join(",", @{$avant});
-          warn "w${w1} ". join(",", @{$actuel});
+          my $n = $ways->{$w}->{tags}->{name};
+          my $nb = scalar(@{$avant});
+          warn "w${w} $n ($nb noeuds) " . join(",", @{$avant});
+          my $n1 = $ways->{$w1}->{tags}->{name};
+          my $nb1 = scalar(@{$actuel});
+          warn "w${w1} $n1 ($nb1 noeuds)". join(",", @{$actuel});
           warn "\t " . $self->distance_node_stops(@{$avant}[0], $members, $nodes);
           warn "\t " . $self->distance_node_stops(@{$actuel}[0], $members, $nodes);
           $nb_ko++;

@@ -1141,9 +1141,10 @@ sub wiki_routes {
   warn "wiki_routes() debut";
 #  $self->ksma_masters();
 #  my $hash = $self->oapi_get("area[name='Saint-Malo'];(relation[network!~'fr_'][type=route][route=bus](area));out meta;", "$self->{cfgDir}/route_vide.osm");
-#  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route][route=bus];out meta;", "$self->{cfgDir}/network_wiki.osm");
-  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route_master][route_master=bus];out meta;", "$self->{cfgDir}/network_wiki.osm");
+  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route][route=bus];out meta;", "$self->{cfgDir}/network_wiki.osm");
+#  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route_master][route_master=bus];out meta;", "$self->{cfgDir}/network_wiki.osm");
   my $wiki = <<'EOF';
+==Les routes==
 {|class="wikitable sortable"
 |-
 !scope="col"| Ligne
@@ -1181,8 +1182,8 @@ EOF
     my $network = $relation->{tags}->{network};
     my $to = $relation->{tags}->{to};
     my $name = $relation->{tags}->{name};
-    my $fg = $relation->{tags}->{colour};
-    my $bg = $relation->{tags}->{bgcolor};
+    my $fg = $relation->{tags}->{text_colour};
+    my $bg = $relation->{tags}->{colour};
     $wiki .= <<EOF;
 |-
 !scope="row"| {{Sketch Line|$ref|$network|bg=$bg|fg=$fg}}
@@ -1194,8 +1195,10 @@ EOF
   $wiki .= <<EOF;
 |}
 EOF
-  warn "wiki_routes() fin";
-  print $wiki;
+  my $dsn = "$self->{cfgDir}/routes_wiki.txt";
+  open(TXT, '>:utf8', $dsn);
+  print TXT $wiki;
+  warn "wiki_routes() fin $dsn";
 }
 #
 # pour les différentes lignes

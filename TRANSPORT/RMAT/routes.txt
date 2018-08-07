@@ -2,7 +2,7 @@ id;ref:network;ref;name;description;from;to
 6230932;1-A;1;Réseau MAT Ligne 1-A;Intra-Muros <> Gares <> Saint-Servan <> La Madeleine;Intra-Muros;La Madeleine
 6230958;1-B;1;Réseau MAT Ligne 1-B;Intra-Muros <> Gares <> Saint-Servan <> La Madeleine;La Madeleine;Intra-Muros
 6231002;2-A;2;Réseau MAT Ligne 2-A;La Madeleine <> Découverte <> Gares <> Intra-Muros;Intra-Muros;La Madeleine
-6231001;2-B;2;Réseau MAT Ligne 2-B;La Madeleine <> Découverte <> Gares <> Intra-Muross;La Madeleine;Intra-Muros
+6231001;2-B;2;Réseau MAT Ligne 2-B;La Madeleine <> Découverte <> Gares <> Intra-Muros;La Madeleine;Intra-Muros
 6231064;3-A;3;Réseau MAT Ligne 3-A;Intra-Muros <> Gares <> Aristide Briand <> Gambetta <> Paramé <> Croix Désilles;Intra-Muros;Croix Désilles
 6231197;3-B;3;Réseau MAT Ligne 3-B;Intra-Muros <> Gares <> Aristide Briand <> Gambetta <> Paramé <> Croix Désilles;Croix Désilles;Intra-Muros
 6232493;4-A;4;Réseau MAT Ligne 4-A;Château-Malo <> Grassinais <> La Madeleine <> Bellevue <> Saint-Servan <> Gares <> Courtoisville <> Paramé <> IUT <> Rôthéneuf;Château-Malo;Rothéneuf
@@ -27,4 +27,4 @@ id;ref:network;ref;name;description;from;to
 6232486;12-B;12;Réseau MAT Ligne 12-B;Plerguer <> Châteauneuf d’Ille-et-Vilaine <> La Ville-es-Nonais <> Saint-Suliac <> Launay Breton;Plerguer;Launay Breton
 6232488;13 Hiver-A;13 Hiver;Réseau MAT Ligne 13 Hiver-A;St-Méloir Gare La Gouesnière <> Saint-Méloir-des-Ondes <> Cancale Port Mer;Cancale Port Mer;Saint-Méloir Gare la Gouesnière
 6232489;13 Hiver-B;13 Hiver;Réseau MAT Ligne 13 Hiver-B;St-Méloir Gare La Gouesnière <> Saint-Méloir-des-Ondes <> Cancale Port Mer;Saint-Méloir Gare la Gouesnière;Cancale Port Mer
-2087486;P+R;P+R;Réseau MAT Navette Parking Paul Féval;Parking Paul Féval;Intra-Muros
+2087486;P+R;P+R;Réseau MAT Navette Parking Paul Féval;Navette Parking Paul Féval;Parking Paul Féval;Intra-Muros

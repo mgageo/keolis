@@ -14,14 +14,22 @@ sub rmat_bus_stop_diff {
   warn "rmat_bus_stop_diff() debut";
   my $hash = $self->oapi_get("node(area:3601970852);node(around:1000)[highway=bus_stop];out meta;", "$self->{cfgDir}/rmat_bus_stop_diff.osm");
 }
+#
+# liste des routes avec les arrêts
 sub rmat_routes_liste {
   my $self = shift;
   warn "rmat_routes_liste() debut";
-  $self->stop2platform();
+  $self->rmat_timeo();
+#
+# pour remplacer les stop par des platform
+#  $self->stop2platform();
   my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route][route=bus];>>;out meta;", "$self->{cfgDir}/rmat_bus_stop_liste.osm");
   $self->{csv} = 'id;ref;name;description;from;to';
   $self->{tags_nodes} = ();
   foreach my $relation (sort tri_tags_ref @{$hash->{relation}}) {
+    if ( $relation->{tags}->{ref} !~ m{^$self->{ref}\D*} ) {
+      next;
+    }
     $self->rmat_route_liste($relation, $hash);
   }
   my $f_txt = "$self->{cfgDir}/routes_osm.txt";
@@ -31,6 +39,10 @@ sub rmat_routes_liste {
   warn "rmat_routes_liste() $f_txt";
   for my $tag (sort keys %{$self->{tags_nodes}} ) {
     printf("% 20s %5d\n", $tag, $self->{tags_nodes}->{$tag});
+  }
+  for my $id ( sort keys %{$self->{arrets}} ) {
+    my $m = $hash->{osm}->{node}->{$id};
+    printf("%s % 30s %s\n", $id, $m->{tags}->{name}, join(',', @{$self->{arrets}->{$id}}));
   }
 }
 sub rmat_route_liste {
@@ -43,6 +55,7 @@ sub rmat_route_liste {
   printf("\t%s\n", $relation->{tags}->{description});
   printf("\t%s;%s\n", $relation->{tags}->{from}, $relation->{tags}->{to});
   $self->{csv} .= sprintf("\n%s;%s;%s;%s;%s;%s", $relation->{id}, $relation->{tags}->{ref}, $relation->{tags}->{name}, $relation->{tags}->{description}, $relation->{tags}->{from}, $relation->{tags}->{to});
+  my $ref = $relation->{tags}->{'ref:network'};
 # vérification du type des nodes
   my $ordre = 0;
   my $osm = '';
@@ -52,13 +65,15 @@ sub rmat_route_liste {
     };
     $ordre++;
     my $m = $hash->{osm}->{$member->{type}}->{$member->{ref}};
+    push @{$self->{arrets}->{$m->{id}}}, $relation->{tags}->{ref};
     if ( $member->{type} ne 'node' ) {
       printf("\t*** %s %s %s\n", $member->{type}, $member->{ref}, $m->{tags}->{name} );
 #      confess;
     };
 #    next;
 #    warn Dumper $hash->{osm}->{$member->{type}}->{$member->{ref}};
-    printf("\t%02D %s\n", $ordre, $m->{tags}->{name});
+    printf("\t%02D %s %s n%s %s\n", $ordre, $m->{tags}->{name}, $m->{tags}->{public_transport}, $m->{id}, $self->{routes}->{$ref}->{arrets}->{$ordre});
+    $self->rmat_node_valid($m);
     if ( $member->{role} ne $m->{tags}->{public_transport} ) {
       printf("\t*** %s # %s n%s\n", $member->{role}, $m->{tags}->{public_transport}, $m->{id} );
       if ( not defined  $self->{stop2platform}->{$member->{ref}} ) {
@@ -74,7 +89,6 @@ sub rmat_route_liste {
       printf("\t%s => %s\n", $avant, $apres);
       $osm =~ s{$avant}{$apres};
     }
-    $self->rmat_node_valid($m);
 #    confess Dumper $member;
   }
   if ( $osm ne '' ) {
@@ -141,6 +155,8 @@ sub rmat_masters {
   }
   close(TXT);
 }
+#
+# lecture du fichier de configuration des routes
 sub rmat_routes {
   my $self = shift;
   $self->rmat_masters();
@@ -181,7 +197,6 @@ sub rmat_routes_verif {
     delete $r->{'id'};
     $r->{name} = xml_escape($r->{name});
     $r->{description} = xml_escape($r->{description});
-
     my @keys = keys %{$r};
     $osm = $self->{oOSM}->modify_tags($osm, $r, @keys);
 #    warn $osm;
@@ -219,19 +234,29 @@ sub rmat_arrets {
   }
   close(CSV);
 }
+# https://smallpdf.com/fr/pdf-en-excel
 sub rmat_timeo {
   my $self = shift;
   warn "rmat_timeo()";
-  my $f_csv = "$self->{cfgDir}//Liste_des_codes_TIMEO_ete_2018_3.csv";
-  open(CSV, "<",  $f_csv) or die "...() erreur:$! $f_csv";
+  $self->rmat_routes();
+  my $f_csv = "$self->{cfgDir}/Liste_des_codes_TIMEO_ete_2018_3.csv";
+  open(CSV, "<:utf8",  $f_csv) or die "...() erreur:$! $f_csv";
   my $Ligne = '';
+  my $Desc = '';
   my $ordre = 0;
+  my $ref = '';
+  my $From = '';
+  my $To = '';
   while( my $ligne = <CSV>) {
     chomp($ligne);
 #    warn $ligne;
-    if ( $ligne =~ m{^(Ligne.*);} ) {
-      $Ligne = $1;
+    if ( $ligne =~ m{^(Ligne.*);(.*)} ) {
+      $Desc = $1;
+      $ref = $2;
+      ($Ligne, $From, $To) = ($Desc =~ m{Ligne (.*) : Sens : (.*) vers (.*)}i);
       $ordre=0;
+#      printf("%s;%s;%s;%s;%s\n", $Ligne, $From, $To, $self->{routes}->{$ref}->{from}, $self->{routes}->{$ref}->{to});
+#      confess Dumper $self->{routes}->{$ref};
       next;
     }
     if ( $ligne =~ m{^Nom des arr} ) {
@@ -241,12 +266,12 @@ sub rmat_timeo {
       next;
     }
     $ordre++;
-    printf("%s;%s;%s\n", $Ligne, $ordre, $ligne);
+#    printf("%s;%s;%s\n", $ref, $ordre, $ligne);
+    $self->{routes}->{$ref}->{arrets}->{$ordre} = $ligne;
   }
   close(CSV);
 }
-# https://smallpdf.com/fr/pdf-en-excel
-sub rmat_timeo {
+sub rmat_timeo_v0 {
   my $self = shift;
   warn "rmat_timeo()";
   my $f_txt = "$self->{cfgDir}/timeo.txt";
@@ -267,44 +292,35 @@ sub rmat_timeo {
 sub rmat_routes_diff {
   my $self = shift;
   warn "rmat_routes_diff() debut";
-  $self->rmat_masters();
-  my $hash = $self->oapi_get("relation[network='fr_rmat'][type=route][route=bus];out meta;", "$self->{cfgDir}/routes_diff.osm");
+  $self->rmat_routes();
+  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route][route=bus];out meta;", "$self->{cfgDir}/routes_diff.osm");
   my $level0 = '';
   foreach my $relation (@{$hash->{relation}}) {
-    my $ref_network = $relation->{tags}->{'ref:rmat'};
-    if ( $ref_network =~ m{\-[ABCD]$} ) {
-      next;
-    }
+    my $ref_network = $relation->{tags}->{'ref:network'};
     warn sprintf("rmat_routes_diff() r%s ;ref:%s;%s;%s;%s;%s", $relation->{id}, $relation->{tags}->{ref}, $relation->{user}, $relation->{timestamp}, scalar(@{$relation->{nodes}}), scalar(@{$relation->{ways}}));
     $level0 .= 'r' . $relation->{id} . ',';
     $self->{id} = $relation->{id};
-    $self->{'tags'}->{'ref'} = $relation->{tags}->{ref};
-#    $self->rmat_route_diff();
+    if ( $relation->{tags}->{ref} =~ m{P\+R} ) {
+#      next;
+    }
+    $self->rmat_route_diff($relation);
   }
   chop $level0;
   warn "rmat_routes_diff() level0: $level0";
 }
 sub rmat_route_diff {
   my $self = shift;
+  my $relation = shift;
   warn "rmat_route_diff() debut";
-  my $id = $self->{id};
-  my $ref = $self->{tags}->{ref};
-  if ( not defined $self->{masters}->{$ref} ) {
+  my $id = $relation->{id};
+  my $ref = $relation->{tags}->{'ref:network'};
+  if ( not defined $self->{routes}->{$ref} ) {
     warn "ref:$ref";
     return;
   }
-
-  my $name = $self->{masters}->{$ref}->{name};
-  my $tags;
-  $tags->{text_color} =  $self->{masters}->{$ref}->{color};
-  $tags->{colour} =  $self->{masters}->{$ref}->{bgcolor};
-  my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $id));
-  $tags->{description} = xml_escape($name);
-  $tags->{name} = xml_escape("Bus Saint-Malo Ligne $ref");
-#  $tags->{"ref:rmat"} = "$ref-AR";
-  my $osm = $self->{oOSM}->modify_tags($relation_osm, $tags, qw(name description text_color colour));
-  $osm =~ s{<member type="node" ref="(\d+)" role="[^"]*"/>}{<member type="node" ref="$1" role="platform"/>}gsm;
-  $self->{oAPI}->changeset($osm, $self->{osm_commentaire} . ' modification tags', 'modify');
+  my $tags = $self->{routes}->{$ref};
+  $tags = { %$tags, %{$self->{tags}} };
+  $self->osm_tags_valid($relation, $tags);
   warn "rmat_route_diff() fin";
 }
 #
@@ -321,15 +337,12 @@ sub rmat_routes_master_diff {
     $refs->{$relation->{tags}->{ref}} = $relation;
     warn sprintf("rmat_routes_master_diff() r%s ;ref:%s;%s;%s;%s;%s", $relation->{id}, $relation->{tags}->{ref}, $relation->{user}, $relation->{timestamp}, scalar(@{$relation->{nodes}}), scalar(@{$relation->{ways}}));
     $level0 .= 'r' . $relation->{id} . ',';
-    $self->{id} = $relation->{id};
-    $self->{'tags'}->{'ref'} = $relation->{tags}->{ref};
-    $self->{'ref'} = $relation->{tags}->{ref};
-#    $self->rmat_route_master_diff();
-    $self->valid_route_master();
+    $self->rmat_route_master_diff($relation);
+#    $self->valid_route_master();
   }
-  exit;
   chop $level0;
   warn "rmat_routes_master_diff() level0: $level0";
+  exit;
   foreach my $ref (sort keys %{$self->{masters}} ) {
     warn $ref;
     if ( defined $refs->{$ref} ) {
@@ -360,23 +373,16 @@ EOF
 sub rmat_route_master_diff {
   my $self = shift;
   warn "rmat_route_master_diff() debut";
-  my $id = $self->{id};
-  my $ref = $self->{tags}->{ref};
+  my $relation = shift;
+  my $id = $relation->{id};
+  my $ref = $relation->{tags}->{'ref'};
   if ( not defined $self->{masters}->{$ref} ) {
     warn "ref:$ref";
     return;
   }
-  my $name = $self->{masters}->{$ref}->{name};
-  my $tags;
-  $tags->{text_color} =  $self->{masters}->{$ref}->{color};
-  $tags->{colour} =  $self->{masters}->{$ref}->{bgcolor};
-  my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $id));
-  $tags->{description} = xml_escape($name);
-  $tags->{name} = xml_escape("Bus Saint-Malo Ligne $ref");
-#  $tags->{"ref:rmat"} = "$ref-AR";
-  my $osm = $self->{oOSM}->modify_tags($relation_osm, $tags, qw(name description text_color colour));
-  $osm =~ s{<member type="node" ref="(\d+)" role="[^"]*"/>}{<member type="node" ref="$1" role="platform"/>}gsm;
-  $self->{oAPI}->changeset($osm, $self->{osm_commentaire} . ' modification tags', 'modify');
+  my $tags = $self->{masters}->{$ref};
+  $tags = { %$tags, %{$self->{tags}} };
+  $self->osm_tags_valid($relation, $tags);
   warn "rmat_route_master_diff() fin";
 }
 #
@@ -543,5 +549,78 @@ sub stop2platform {
 #    confess;
   }
 }
-
+#
+# les noeuds platforms trop proches
+sub rmat_platforms_proche {
+  my $self = shift;
+  $self->mobibreizh_platform_lit();
+  foreach my $n (keys %{$self->{platform}} ) {
+    my $node = $self->{platform}->{$n};
+#    confess Dumper $node;
+    $self->rmat_platform_proche($node);
+  }
+}
+#
+# un noeud platform versus les stops
+sub rmat_platform_proche {
+  my $self = shift;
+  my $node = shift;
+  my $distance = 500000;
+  my $n1;
+  foreach my $n (keys %{$self->{platform}} ) {
+    my $node1 = $self->{platform}->{$n};
+    if ( $node->{id} eq $node1->{id} ) {
+      next;
+    }
+#    confess Dumper $stop;
+    my $d = haversine_distance_meters($node->{lat}, $node->{lon}, $node1->{lat}, $node1->{lon});
+    if ( $d < $distance ) {
+      $distance = $d;
+      $n1 = $node1;
+    }
+  }
+  if ( $distance < 8 ) {
+    warn "$distance n$node->{id} $node->{tags}->{name} $n1->{name}";
+  }
+}
+#
+# validation des tags d'u node/way/relation
+sub osm_tags_valid {
+  my $self = shift;
+  my $osm = shift;
+  my $tags = shift;
+  my $nb_absent = 0;
+  my $nb_diff = 0;
+  delete $tags->{'id'};
+#  $tags->{name} = xml_escape($tags->{name});
+#  $tags->{description} = xml_escape($tags->{description});
+#    confess Dumper $node;
+  for my $tag ( keys %{$tags} ) {
+    if ( not defined $osm->{tags}->{$tag} ) {
+      warn "osm_tags_valid() absent $osm->{id} tag:$tag";
+#      warn Dumper $node;
+      $nb_absent++;
+      next;
+    }
+    if ( $tags->{$tag} ne $osm->{tags}->{$tag} ) {
+      warn "osm_tags_valid() diff $osm->{id} tag:$tag " . $osm->{tags}->{$tag};
+      $nb_diff++;
+    }
+  }
+  warn "osm_tags_valid() $osm->{osm}/$osm->{id} absent: $nb_absent diff: $nb_diff";
+  if ( $nb_absent == 0 && $nb_diff == 0) {
+    return 0;
+  }
+#  return;
+#  warn Dumper $tags;
+#  warn Dumper $osm->{tags};
+#  confess;
+  my $xml = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", $osm->{osm}, $osm->{id}));
+#    confess $node_osm;
+  $tags->{name} = xml_escape($tags->{name});
+  $tags->{description} = xml_escape($tags->{description});
+  $xml = $self->{oOSM}->modify_tags($xml, $tags, keys %{$tags});
+  $self->{oAPI}->changeset($xml, $self->{osm_commentaire} . " correction tags", 'modify');
+#  confess;
+}
 1;
