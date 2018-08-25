@@ -28,12 +28,13 @@ sub valid_routes_ways {
   my $osm = $self->{oOAPI}->osm_get($requete, "$self->{cfgDir}/relation_routes.osm");
   my ( @id );
   for my $relation ( @{$osm->{'relation'}} ) {
-    my $ref_network = $relation->{tags}->{'ref:ksma'};
+#    confess Dumper $relation->{tags};
+    my $ref_network = $relation->{tags}->{$self->{k_ref}};
     if ( $ref_network !~ m{7} ) {
 #      next;
     }
     if ( exists $self->{relations}->{$relation->{id}} ) {
-      next;
+#      next;
     }
 #    warn Dumper $r->{tags};
 #    push @id, $r->{tags}{$tag};
@@ -50,6 +51,7 @@ sub valid_routes_ways {
   my $level0 = '';
   my $refs = '';
   my $josm = '';
+  warn "valid_routes_ways() nb \@id:" . scalar(@id);
   for my $id ( sort {$a->{ref} cmp $b->{ref} } @id ) {
 #    confess Dumper $id;
     $self->{tags} = $id;

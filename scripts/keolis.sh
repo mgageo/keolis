@@ -113,7 +113,7 @@ _STAR_dl() {
     DlDir=$(date +%Y%m%d)
     [ -d "${DlDir}" ] || mkdir "$DlDir"
     [ -f "${DlDir}/${fic}" ] || cp -pv ${fic}  "${DlDir}/${fic}"
-    7za -y x ${fic}
+    7za -y x ${fic} -bb3
 
   )
 }
@@ -129,6 +129,7 @@ tco-bus-topologie-dessertes-td csv
 tco-bus-topologie-lignes-td csv
 tco-bus-topologie-parcours-td csv
 tco-bus-topologie-parcours-td geojson
+tco-bus-topologie-pointsarret-td csv
 tco-bus-topologie-pointsarret-td geojson
 EOF
   cp -pv $VarDir/tco-bus-topologie-parcours-td.geojson ../leaflet/exemples/star_parcours.json

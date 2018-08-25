@@ -39,11 +39,12 @@ use TransportGtfs;
 use TransportItiRoute;
 use TransportNetwork;
 use TransportOsrm;
-use TransportParcours;
+# use TransportParcours;
 use TransportRoute;
 use TransportRouteMaster;
 use TransportStopArea;
 use TransportRmat;
+use TransportStar;
 use TransportVitre;
 use TransportChateaubourg;
 use TransportIllenoo;
@@ -184,6 +185,12 @@ perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 rmat rmat_bus_stop_diff
 perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 rmat rmat_routes_verif
 perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 rmat rmat_routes_liste
 perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 rmat stop_position_verif
+#
+# pour le Réseau STAR
+# les arrets : creation si besoin
+perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 star star_nodes_stops_diff
+# les arrets sur les routes
+perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 star star_relations_stops_diff
 EOF
 
 }
@@ -217,10 +224,10 @@ sub _star {
     id => $id,
     shape => $shape,
     network => 'FR:STAR',
-    operator => "Star",
+    operator => "STAR",
     cfgDir => "TRANSPORT/STAR",
-    source => "http://data.keolis-rennes.com 17 juin 2018",
-    osm_commentaire => 'maj juin 2018',
+    source => "STAR Data Explore/Rennes Métropole",
+    osm_commentaire => 'maj aout 2018',
     k_route => "route",
     k_ref => 'ref:FR:STAR',
     tag_ref => '["ref:FR:STAR"]',
