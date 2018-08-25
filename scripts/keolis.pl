@@ -154,10 +154,6 @@ perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 star diff_bus_stop
 perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 star diff_routes
 perl scripts/keolis.pl star valid_routes_master
 perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 --ref C4 star diff_route
-#
-# version avec les shapes
-perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 0 star routes_shapes_diff
-perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 0 --shape 0158-B-2319-1615 star route_shape_stops
 # continuité des routes star ksma surf vitre chateaubourg
 perl scripts/keolis.pl star valid_routes_ways
 perl scripts/keolis.pl --id 0001-01-A -- star valid_route_ways
@@ -191,6 +187,10 @@ perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 rmat stop_position_verif
 perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 star star_nodes_stops_diff
 # les arrets sur les routes
 perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 star star_relations_stops_diff
+#
+# version avec les shapes
+perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 0 star star_routes_shapes_diff
+perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 0 --shape 0158-B-2319-1615 star star_route_shape_stops
 EOF
 
 }
