@@ -217,9 +217,9 @@ sub osm_nodes_bus_stop_ref {
 }
 #
 # transformation de la réponse osm en hash
-sub osm2hash {
+sub osm2hash_v1 {
   my $osm = shift;
-  confess $osm;
+  confess "osm2hash" .$osm;
   my $hash = XMLin(
     $osm,
     ForceArray    => 1,

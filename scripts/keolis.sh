@@ -741,7 +741,7 @@ OSM() {
   _ENV_keolis_sqlite
   _ENV_gdal210
   _ENV_gpsbabel
-  table=star_parcours;champ=nomcourtlig;CFG=KEOLIS
+  table=star_parcours;champ=code;CFG=KEOLIS
 #  table=illenoo_parcours;champ=NOM_LIGNE
   DB dump_txt ${table} id
   while read id ; do

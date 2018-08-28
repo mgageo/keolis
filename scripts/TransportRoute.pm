@@ -11,7 +11,7 @@ use strict;
 use Carp;
 use Data::Dumper;
 use LWP::Simple;
-our ( $gtfs_iti, $ref, $hash);
+our ($ref, $hash);
 #
 # pour trouver les relations "route" avec un contenu non significatif, moins de 5 ways
 sub supprime_route_vide {
@@ -71,398 +71,8 @@ sub ref_network_routes {
   $self->{oAPI}->changeset($osm, $self->{osm_commentaire} . ' modification tag ref:$net', 'modify');
   warn "ref_network_routes() fin";
 }
-#
-# pour trouver les relations "route" non utilisées dans une relation route_master
-sub valid_route_hors_master {
-  my $self = shift;
-  warn "valid_route_hors_master() debut";
-  my $hash = $self->oapi_get("relation[network=fr_star][type=route][route=bus]->.all;relation[network=fr_star][type=route_master][route_master=bus];relation(r);( .all; - ._; );out meta;", "$self->{cfgDir}/route_hors_master.osm");
-  my $gtfs_routes = $self->gtfs_routes_get();
-  my $level0 = '';
-  foreach my $relation (sort tri_tags_ref @{$hash->{relation}}) {
-    warn sprintf("valid_route_hors_master() r%s;ref:%s;%s;%s", $relation->{id}, $relation->{tags}->{ref}, $relation->{user}, $relation->{timestamp});
-    if ( not defined $gtfs_routes->{$relation->{tags}->{ref}} ) {
-      warn "\t hors gtfs";
-      $level0 .= ",r". $relation->{id};
-    }
-  }
-  warn $level0;
-}
-#
-# cohérence des tags from to avec la première et dernière station
-sub fromto_route {
-  my $self = shift;
-  warn "fromto_route() debut";
-#  my $hash = $self->oapi_get("relation[network=fr_star][type=route]['route'='bus'];out meta;", "$self->{cfgDir}/route_bus.osm");
-  my $hash = $self->oapi_get("(relation[network=fr_star][type=route]['route'='bus'];node(r));out meta;", "$self->{cfgDir}/route_bus.osm");
-#  my $hash_nodes = $self->osm_nodes_bus_stop_get(0);
-  my $gtfs_routes = $self->gtfs_routes_get();
-  my $gtfs_stops = $self->gtfs_stops_getid();
-  my ($id_name, $nodes);
-#  foreach my $node (sort @{$hash_nodes->{node}}) {
-  foreach my $node (sort @{$hash->{node}}) {
-    $id_name->{$node->{id}} = $node->{tags}->{name};
-    $nodes->{$node->{id}} = $node;
-  }
-#  confess Dumper $id_name;
-  my $osm = '';
-  foreach my $relation (sort @{$hash->{relation}}) {
-    if ( $relation->{tags}->{ref} =~ m{^Ts\d+} ) {
-      next;
-    }
-    my $ref = $relation->{tags}->{ref};
-    if ( $ref =~ m{^\d+$} && $ref >= 200 ) {
-      next;
-    }
-    if ( $ref != 233 ) {
-#      next;
-    }
-    warn "fromto_route() r" . $relation->{id} . " ref:" . $ref;
-    if ( not defined $gtfs_routes->{$ref} ) {
-      warn "fromto_route() *** absent gtfs";
-      next;
-    }
-#
-# recherche des from to
-    @{$relation->{nodes}} = ();
-    @{$relation->{ways}} = ();
-    if ( not defined $relation->{member} ) {
-      warn "fromto_route() *** pas de memmbre";
-      next;
-    }
-# vérification du type des "member"
-    for my $member ( @{$relation->{member}} ) {
-      if ( $member->{type} eq 'node' ) {
-        push @{$relation->{nodes}}, $member->{ref};
-        next;
-      };
-      if ( $member->{type} eq 'way' ) {
-        push @{$relation->{ways}}, $member->{ref};
-        next;
-      };
-    }
-    if ( scalar(@{$relation->{nodes}}) <= 1 ) {
-      warn "fromto_route() *** pas assez de stations r" . $relation->{id} . " ref:" . $relation->{tags}->{ref};
-      next;
-    }
-#    confess Dumper $relation->{nodes}[0];
-    my $id = $relation->{nodes}[0];
-    if ( not defined $id_name->{$id} ) {
-      warn "fromto_route() *** from id " . $id . " ref:" . $relation->{tags}->{ref};
-      next;
-    }
-    my $from_id = $nodes->{$id}->{tags}->{ref};
 
-    my $from = $id_name->{$id};
-    $id = $relation->{nodes}[-1];
-    if ( not defined $id_name->{$id} ) {
-      warn "fromto_route() *** to id " . $id . " ref:" . $relation->{tags}->{ref};
-      next;
-    }
-    my $to = $id_name->{$id};
-    my $to_id = $nodes->{$id}->{tags}->{ref};
-    if ( not defined  $gtfs_stops->{$from_id} ) {
-      warn "fromto_route() *** gtfs_stops " . $from_id;
-      next;
-    }
-    if ( not defined  $gtfs_stops->{$to_id} ) {
-      warn "fromto_route() *** gtfs_stops " . $to_id;
-      next;
-    }
-    my $dest = $to;
-    if ( $gtfs_stops->{$from_id}->{'stop_desc'} ne $gtfs_stops->{$to_id}->{'stop_desc'} ) {
-      my $ville = $gtfs_stops->{$from_id}->{stop_desc};
-#      $from =~ s{$ville\s+}{};
-#      $from = $ville . ' (' . $from . ')';
-      $ville = $gtfs_stops->{$to_id}->{stop_desc};
-      $dest =~ s{$ville\s+}{};
-      $dest = $ville . ' (' . $to . ')';
-    }
-    if ( 2 == 1 ) {
-      warn "from_id:$from_id";
-      warn Dumper $gtfs_stops->{$from_id};
-      warn "to_id:$to_id";
-      warn Dumper $gtfs_stops->{$to_id};
-      warn "to:$to " . $gtfs_stops->{$to_id}->{'stop_desc'};
-    }
 
-#
-# comparaison avec les tags
-    my $ko = 0;
-    my $tags;
-    $tags->{from} =  $from;
-    $tags->{to} =  $to;
-    $tags->{description} =  $gtfs_routes->{$ref}->{route_long_name};
-    $tags->{name} =  "Bus Rennes Ligne " . $gtfs_routes->{$ref}->{route_short_name} . " Direction " . $dest;
-    $tags->{text_color} =  '#' . $gtfs_routes->{$ref}->{route_text_color};
-    $tags->{colour} =  '#' . $gtfs_routes->{$ref}->{route_color};
-    for my $tag (sort keys %{$tags} ) {
-      if ( not defined $relation->{tags}->{$tag} ) {
-        $relation->{tags}->{$tag} = "???";
-      }
-      if ( $relation->{tags}->{$tag} ne $tags->{$tag} ) {
-        $ko++;
-        warn "\t *** $tag  osm:" . $relation->{tags}->{$tag}. "--gtfs:" . $tags->{$tag} . '--';
-      }
-    }
-    if ( $ko > 0 ) {
-      my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
-      $tags->{description} = xml_escape($gtfs_routes->{$ref}->{route_long_name});
-      $osm = $self->{oOSM}->modify_tags($relation_osm, $tags, qw(name description text_color colour from to));
-#      warn Dumper $gtfs_routes->{$ref};exit;
-      $self->{oAPI}->changeset($osm, $self->{osm_commentaire} . ' modification tags', 'modify');
-#      confess;
-    }
-    next;
-    my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
-    $osm .= $self->{oOSM}->relation_disused($relation_osm);
-  }
-
-}
-#
-# pour trouver les meilleures relations
-sub valid_route_type {
-  my $self = shift;
-  my $ref = $self->{ref};
-  warn "valid_route_type() debut";
-  $hash = $self->oapi_get("(relation[network=fr_star][type=route][route=bus][ref=$ref];node(r));out meta;", "$self->{cfgDir}/relation_type_${ref}.osm");
-# indexationdes nodes
-  my $id_name;
-  foreach my $node (sort @{$hash->{node}}) {
-    $id_name->{$node->{id}} = $node->{tags}->{name}
-  }
-  my $csv = "";
-  $csv = join(";", qw(ref description name destination from to id user timestamp));
-  foreach my $relation (@{$hash->{relation}}) {
-    $csv .= "\n";
-    @{$relation->{nodes}} = ();
-    @{$relation->{ways}} = ();
-    if ( not defined $relation->{member} ) {
-      warn "valid_route_type() *** member";
-      next;
-    }
-# vérification du type des nodes
-    for my $member ( @{$relation->{member}} ) {
-      if ( $member->{type} eq 'node' ) {
-        push @{$relation->{nodes}}, $member->{ref};
-        next;
-      };
-      if ( $member->{type} eq 'way' ) {
-        push @{$relation->{ways}}, $member->{ref};
-        next;
-      };
-    }
-    undef $relation->{member};
-#    confess Dumper $relation->{nodes}[0];
-    my $id = $relation->{nodes}[0];
-    if ( not defined $id_name->{$id} ) {
-      warn "valid_route_type() *** from id " . $id . " ref:" . $relation->{tags}->{ref};
-      next;
-    }
-    my $from = $id_name->{$id};
-    $id = $relation->{nodes}[-1];
-    if ( not defined $id_name->{$id} ) {
-      warn "valid_route_type() *** to id " . $id . " ref:" . $relation->{tags}->{ref};
-      next;
-    }
-    my $to = $id_name->{$id};
-#    confess Dumper $relation;
-    for my $k ( qw(ref route description name destination from to) ) {
-      if ( exists $relation->{tags}->{$k} ) {
-        $csv .= $relation->{tags}->{$k};
-      }
-      $csv .= ';';
-    }
-    $csv .=  $relation->{id} . ";";
-    for my $k ( qw(user timestamp) ) {
-      $csv .= $relation->{$k};
-      $csv .= ';';
-    }
-    for my $k ( qw(nodes ways) ) {
-      $csv .= scalar(@{$relation->{$k}});
-      $csv .= ';';
-    }
-    chop $csv;
-    $csv .= ";$from;$to"
-#    last;
-#    warn $tags;
-  }
-  print "$csv\n";
-}
-#
-# pour preparer la suppression des disused
-sub disused_route_desc {
-  my $self = shift;
-  warn "disused_route() debut";
-  my $hash = $self->oapi_get("relation[network=fr_star]['disused:route'];out meta;", "$self->{cfgDir}/disused_route.osm");
-  my $osm = '';
-  foreach my $relation (@{$hash->{relation}}) {
-    my @desc;
-    for my $k ( qw(ref description name) ) {
-      if ( exists $relation->{tags}->{$k} && $relation->{tags}->{$k} !~ m{^ZZZ }) {
-        $relation->{tags}->{$k} = "ZZZ " . $relation->{tags}->{$k};
-        push @desc, $k;
-      }
-    }
-    if ( $#desc < 1 ) {
-      next;
-    }
-    my $relation_id = $relation->{'id'};
-    if ( $relation_id =~m{^140084} ) {
-      warn $relation_id;
-      next
-    }
-    if ( $relation_id =~m{^174333} ) {
-      warn $relation_id;
-      next;
-    }
-    if ( $relation_id =~m{^2294979} ) {
-      next;
-    }
-    if ( $relation_id =~m{^2294980} ) {
-      next;
-    }
-    if ( $relation_id =~m{^4037898} ) {
-      next;
-    }
-    my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation_id));
-    $osm .= $self->{oOSM}->modify_tags($relation_osm, $relation->{tags}, @desc) . "\n";
-#    confess Dumper $osm;
-    $self->{oAPI}->changeset($osm, $self->{osm_commentaire} . ' modification disused', 'modify');
-    $osm = '';
-#    last;
-  }
-}
-#
-# pour passer en disused les routes sans ref:star
-sub disused_route_star {
-  my $self = shift;
-  warn "disused_route() debut";
-  my $hash = $self->oapi_get("relation[network=fr_star]['route'='bus'];out meta;", "$self->{cfgDir}/disused_route_star.osm");
-  my $osm = '';
-  foreach my $relation (@{$hash->{relation}}) {
-    my @desc;
-    if ( exists $relation->{tags}->{'ref:star'} ) {
-      next;
-    }
-    if ($relation->{tags}->{'ref'} =~ m{^2\d\d$} ) {
-      next;
-    }
-    if ($relation->{tags}->{'ref'} =~ m{^Ts} ) {
-      next;
-    }
-    for my $k ( qw(description name) ) {
-      if ( exists $relation->{tags}->{$k} && $relation->{tags}->{$k} !~ m{^ZZZ }) {
-        $relation->{tags}->{$k} = "ZZZ " . $relation->{tags}->{$k};
-        push @desc, $k;
-      }
-    }
-    if ( $#desc < 1 ) {
-      next;
-    }
-    my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
-    $osm .= $self->{oOSM}->modify_tags($relation_osm, $relation->{tags}, @desc) . "\n";
-#    confess Dumper $osm;
-    $self->{oAPI}->changeset($osm, $self->{osm_commentaire} . ' modification disused', 'modify');
-    $osm = '';
-#    last;
-  }
-}
-#
-# pour supprimer les disused:route
-sub disused_route_delete {
-  my $self = shift;
-  warn "disused_route_delete() debut";
-  my $hash = $self->oapi_get("relation[network=fr_star]['disused:route'='bus'];out meta;", "$self->{cfgDir}/disused_route_delete.osm");
-  my $osm = '';
-  warn "disused_route_delete() nb:" . scalar(@{$hash->{relation}});
-  foreach my $relation (@{$hash->{relation}}) {
-#    confess Dumper $relation;
-    warn "disused_route_delete() ref:" . $relation->{tags}->{ref};
-    $osm = $self->{oOSM}->relation_delete($relation);
-    $self->{oAPI}->changeset($osm, $self->{osm_commentaire} . ' supression disused', 'delete');
-#    last;
-  }
-}
-
-#
-# pour mettre en disused les line
-sub line_disused_route {
-  my $self = shift;
-  warn "line_disused_route() debut";
-  my $hash = $self->oapi_get("relation[network=fr_star][type=route][line=bus];out meta;", "$self->{cfgDir}/unused_route.osm");
-  my $osm = '';
-  warn  "line_disused_route() nb:" . scalar(@{$hash->{relation}});
-  foreach my $relation (@{$hash->{relation}}) {
-    my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
-    $osm .= $self->{oOSM}->relation_disused($relation_osm);
-  }
-  $self->{oAPI}->changeset($osm, $self->{osm_commentaire} . ' passage en disused', 'modify');
-}
-#
-# pour les différentes lignes
-sub diff_routes {
-  my $self = shift;
-  warn "diff_routes() debut";
-  my $gtfs_routes = $self->gtfs_routes_get();
-  $self->{'log'} = '';
-  for $ref (sort tri_ref keys %{$gtfs_routes}) {
-#  for $ref ( 10 .. 49 ) {
-#  for $ref ( 50.. 99 ) {
-#  for $ref ( 100 .. 199 ) {
-#  for $ref ( 200 .. 250 ) {
-#  for $ref ( qw(Ts55 Ts56 Ts57 Ts58) ) {
-# a : la ligne du métro
-    if ( $ref =~ m{^(a)$} ) {
-      next;
-    }
-    if ( $ref !~ m{^\d\d$} ) {
- #     next;
-    }
-    if ( $self->{network} eq 'fr_star' && ( $ref =~ m{^T} || $ref =~ m{^\d\d\d$} ) ) {
-      next;
-    }
-    if ( $self->{network} eq 'fr_star' && ( $ref !~ m{^[\dC]} ) ) {
-      next;
-    }
-    warn "\n\n\ndiff_routes() ref:$ref\n\n\n";
-    $self->{'log'} .= "\n==============\ndiff_routes() ref:$ref\n";
-    $self->{'ref'} = $ref;
-    $self->diff_route();
-  }
-  warn "diff_routes() fin";
-}
-#
-# pour les itinéraires d'une ligne
-sub diff_route {
-  my $self = shift;
-  $self->{mode} = 'relation_tags';
-  $self->{mode} = 'relation_node,relation_create';
-  $ref = $self->{ref};
-  warn "diff_route() ref:$ref";
-  $gtfs_iti = $self->gtfs_keolis_iti_get($ref);
-#  confess Dumper $gtfs_iti;
-  if ( ! $gtfs_iti ) {
-    $self->{'log'} .= "\tdiff_routes() *** gtfs_iti\n";
-    return;
-  }
-#  confess Dumper $gtfs_iti;
-# pas top, sur la variable globale
-  $hash = $self->osm_route_get($ref);
-  $self->relations_route();
-  if ( scalar(@{$hash->{relation}}) > 12 ) {
-    warn "diff_route *** ref:$ref trop de relations nb:".scalar(@{$hash->{relation}});
-    print "diff_route *** ref:$ref trop de relations";
-    $self->{'log'} .= "\tdiff_routes() *** trop de relations\n";
-    print "\n\n\n";
-    for my $relation ( @{$hash->{relation}} ) {
-#      confess Dumper $relation;
-    }
-    return;
-  }
-  $self->relations_route_gtfs();
-  warn "diff_route() ref:$ref fin";
-}
 
 #
 # la validation des données OSM
@@ -534,375 +144,7 @@ sub relations_route {
   warn "relations_route() fin";
 }
 
-#
-# comparaison des relations type=route avec gtfs
-sub relations_route_gtfs {
-  my $self = shift;
-#  my $hash = $self->oapi_get("relation[network=fr_star][type=route][route=bus];out meta;", "$self->{cfgDir}route_bus.osm");
-  warn "relations_route_gtfs() debut nb relations:" . scalar(@{$hash->{relation}});
-  if ( scalar(@{$hash->{relation}}) == 0 ) {
-    $self->relations_route_gtfs_create();
-    return;
-  }
-  my $i_relation = 0;
-  foreach my $relation (sort @{$hash->{relation}}) {
-    $i_relation++;
-    warn sprintf("\n\nrelations_route_gtfs() ref:%s;%s;%s;%s", $relation->{id}, $relation->{tags}->{ref}, $relation->{user}, $relation->{timestamp});
-    $self->relation_route_gtfs($relation, $i_relation);
-  }
-#
-# on crée les relations inexistantes
-  $self->relations_route_gtfs_create();
-  warn "relations_route_gtfs() fin";
-}
-#
-# création des relations à partir des données gtfs
-sub relations_route_gtfs_create {
-  my $self = shift;
-  warn "relations_route_gtfs_create() debut";
-#  confess Dumper $gtfs_iti;
-  my $osm = '';
-  for my $iti ( sort keys %{$gtfs_iti} ) {
-#    confess Dumper $gtfs_iti->{$iti};
-    if ( defined $gtfs_iti->{$iti}->{id_relation} ) {
-      next;
-    }
-    if ( $gtfs_iti->{$iti}->{nb} < $self->{seuil} ) {
-      next;
-    }
-    if ($self->{mode} !~ m{relation_create} ) {
-      confess "relations_route_gtfs_create()"
-    }
-    warn "relations_route_gtfs_create() $iti  $gtfs_iti->{$iti}->{nb} seuil:$self->{seuil}";
-    next;
-#    confess Dumper $gtfs_iti->{$iti};
-    $osm = $self->{oOSM}->relation_route_bus($gtfs_iti->{$iti});
-    my @trip = @{$gtfs_iti->{$iti}->{'trip'}};
-#    confess Dumper \@trip;
-    my $members = "";
-    for my $stop ( @trip ) {
-      my $stop_id = $stop->{stop_id};
-      my $n = $self->osm_nodes_bus_stop_ref( $stop_id );
-#        confess Dumper $n;
-      my $id = $n->{id};
-      $members .= sprintf('    <member type="node" ref="%s" role="platform"/>' ."\n", $id);
-    }
-    $osm =~ s{(\s*</relation>)}{$members$1};
-#    confess $osm;
-    $self->{oAPI}->changeset($osm, $self->{source}, 'create');
-#    $osm .= $gtfs_iti->{$iti}->{osm};
-#    warn $osm;
-#
-  }
-  warn "relations_route_gtfs_create() fin";
-}
-#
-# recherche de la correspondance gtfs osm
-# on utilise le champ to
-sub relation_route_gtfs {
-  my $self = shift;
-  my $relation = shift;
-  my $i_relation = shift;
-#  confess Dumper $gtfs_iti;
-  warn sprintf("relation_route_gtfs() r%s;%s;%s;%s", $relation->{id}, $relation->{tags}->{ref}, $relation->{user}, $relation->{timestamp});
-#  confess Dumper $relation_stops->{$relation};
-  my ( $i, @nodes, @nodes_ref, @stops, $arrets, @refs);
-  $i = 0;
-  @nodes = ();
-  @nodes_ref = ();
-  if ( not defined $relation_stops->{$relation} ) {
-    warn "relation_route_gtfs() *** pas de node";
-    warn Dumper $relation;
-    if ( defined $relation->{tags}->{to} ) {
-      warn "relation_route_gtfs() *** to:" . $relation->{tags}->{to};
-      $nodes[0] = 'from';
-      $nodes[1] =  $relation->{tags}->{to};
-    }
-    if ( scalar(@nodes) == 0 && defined $relation->{tags}->{direction} ) {
-      warn "relation_route_gtfs() *** direction:";
-      $nodes[0] = 'from';
-      $nodes[1] =  $relation->{tags}->{direction};
-    }
-  }
-  for my $node ( @{$relation_stops->{$relation}} ) {
-    $i++;
-    $arrets->{$i}->{node} = $node;
-    if ( ! defined $node->{tags}->{ref} && defined $node->{tags}->{$self->{k_ref}}) {
-#      warn "bus_stop() n$node->{id} *** k_ref $node->{tags}->{name} " . $node->{tags}->{$self->{k_ref}};
-      $node->{tags}->{ref} = $node->{tags}->{$self->{k_ref}};
-    }
-#    warn "relation_route_gtfs() $i node:" . $node->{tags}->{name};
-    push @nodes, $node->{tags}->{name};
-    push @nodes_ref, $node->{tags}->{ref};
-  }
-  warn "relation_route_gtfs() nodes:" . join(";", @nodes);
-  warn "relation_route_gtfs() nodes:" . join(";", @nodes_ref);
-#  warn Dumper $relation->{tags};
-  warn sprintf("relation_route_gtfs() from: %s to: %s", $relation->{tags}->{from}, $relation->{tags}->{to});
-  if ( defined $relation->{tags}->{to} ) {
-    if ( name_norm($relation->{tags}->{to}) ne name_norm($nodes[-1]) ) {
-      warn 'relation_route_gtfs() *** to#nodes[-1] ' . $relation->{tags}->{to} . "#" . $nodes[-1];
-      warn Dumper $relation->{tags};
-    }
-    if ( name_norm($relation->{tags}->{to}) eq name_norm($nodes[0]) ) {
-      warn 'relation_route_gtfs() *** to#nodes[0] ' .$relation->{tags}->{to} . " eq " . $nodes[0];
-      warn 'relation_route_gtfs() *** inverse ***' .join(",", @nodes);
-      @nodes = reverse(@nodes);
-    }
-  }
-  my $nb_nodes = $i;
-#  confess Dumper $gtfs_iti;
-#
-  my ($osm_gtfs, $iti_ok, $itis_ok, $nb_itis);
-  warn sprintf("relation_route_gtfs() ref: %s", $relation->{tags}->{'ref:FR:STAR'});
-  $nb_itis = 0;
-  for my $iti ( sort keys %{$gtfs_iti} ) {
-    warn "relation_route_gtfs() iti:$iti";
-    @stops = ();
-    @refs = ();
-    $i = 0;
-    confess Dumper $gtfs_iti->{$iti};
-    if ( defined $gtfs_iti->{$iti}->{id_relation} ) {
-      warn "relation_route_gtfs() iti:$iti *** relation:";
-      next;
-    }
-#
-# normalement, on n'a plus que 2 itinéraires
-    if ( $gtfs_iti->{$iti}->{nb} < 200 ) {
-#      next;
-    }
 
-    for my $stop ( @{$gtfs_iti->{$iti}->{trip}} ) {
-      $i++;
-      $arrets->{$i}->{stop} = $stop;
-
-#      warn "$i stop: " . $stop->{stop_name};
-      push @stops, $stop->{stop_name};
-      push @refs, $stop->{stop_id};
-    }
-    warn 'relation_route_gtfs() gtfs @stops:' . join(";", @stops);
-    warn 'relation_route_gtfs() gtfs @refs:' . join(";", @refs);
-
-    $osm_gtfs = $gtfs_iti->{$iti}->{osm};
-#
-# même départ et même arrivée ?
-    warn sprintf('relation_route_gtfs() ref from : %s#%s to %s#%s', $nodes[0], $stops[0], $nodes[-1], $stops[-1] );
-    if ( name_norm($nodes[0]) eq name_norm($stops[0]) && name_norm($nodes[-1]) eq name_norm($stops[-1]) ) {
-      @{$itis_ok->{$iti}} = @stops;
-      $iti_ok = $iti;
-      $nb_itis++;
-      next;
-    }
-    warn sprintf('relation_route_gtfs() ref from : %s#%s to %s#%s', $nodes_ref[0], $refs[0], $nodes_ref[-1], $refs[-1] );
-    if ( $nodes_ref[0] eq $refs[0] && $nodes_ref[-1] eq $refs[-1] ) {
-      warn 'relation_route_gtfs() par les ref';
-      @{$itis_ok->{$iti}} = @stops;
-      $iti_ok = $iti;
-      $nb_itis++;
-      next;
-    }
-    next;
-    warn sprintf("relation_route_gtfs() %s # %s or %s # %s", $nodes[0], $stops[0], $nodes[-1], $stops[-1]);
-    if ( name_norm($nodes[0]) eq name_norm($stops[0]) ) {
-      $iti_ok = $iti;
-      last;
-    }
-    if ( name_norm($nodes[-1]) eq name_norm($stops[-1]) ) {
-      $iti_ok = $iti;
-      last;
-    }
-
-
-#    if ( $i_relation == 1 && $nodes[-1] eq $stops[-1] ) {
-#      $gtfs_iti->{$iti}->{id_relation} =  $relation->{id};
-#      last;
-#    }
-# il faut inverser l'ordre des nodes
-#    if ( $i_relation == 2 && $nodes[-1] eq $stops[0] ) {
-#      $gtfs_iti->{$iti}->{id_relation} =  $relation->{id};
-#      last;
-#    }
-  }
-  if ( $nb_itis == 0 ) {
-    warn "relation_route_gtfs() *** iti_ok " . $relation->{id};
-#    confess;
-    return;
-  }
-  if ( $nb_itis > 0 ) {
-    my $n = scalar(@nodes);
-    warn "$n;osm => " . join(";", @nodes);
-    my $diff = 100;
-    for my $iti ( keys %{$itis_ok} ) {
-      my $n_iti = scalar(@{$itis_ok->{$iti}});
-      if ( abs($n - $n_iti) < $diff ) {
-        $iti_ok = $iti;
-        $diff = abs($n - $n_iti);
-      }
-      warn "$iti => ". join(";",  @{$itis_ok->{$iti}});
-    }
-    warn "relation_route_gtfs() nb_itis($nb_itis) > 0 $iti_ok";
-  }
-  $gtfs_iti->{$iti_ok}->{id_relation} =  $relation->{id};
-  my $nb_stops = scalar(@nodes);
-# au moins un départ et une arrivée
-  if ( $nb_stops < 2 ) {
-    warn "relation_route_gtfs() *** pas assez de stops $nb_stops r" .  $relation->{id};
-    return;
-  }
-  warn "relation_route_gtfs() nb_stops: $nb_stops nb_nodes: $nb_nodes";
-  @stops = ();
-  @refs = ();
-  $i = 0;
-  for my $stop ( @{$gtfs_iti->{$iti_ok}->{trip}} ) {
-    $i++;
-    $arrets->{$i}->{stop} = $stop;
-#     warn "$i stop: " . $stop->{stop_name};
-    push @stops, $stop->{stop_name};
-    push @refs, $stop->{stop_id};
-  }
-  warn "nodes " .join(";", @nodes);
-  warn "stops " .join(";", @stops);
-  warn "refs " .join(";", @refs);
-#  return;
-# on met en cohérence la configuration par rapport au gtfs
-# la partie tags
-  if ($self->{mode} eq 'relation_tags') {
-#    confess Dumper $osm_gtfs;
-    my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
-#    confess Dumper  $osm_gtfs;
-    my $osm = $self->{oOSM}->relation_replace_tags($relation_osm, $osm_gtfs);
-    if ( ! $self->{DEBUG} ) {
-      $self->{oAPI}->changeset($osm, $self->{source}, 'modify');
-    } else {
-      warn $osm;
-    }
-    return;
-  }
-  if ($self->{mode} !~ m{relation_node}) {
-    return;
-  }
-# la partie node
-  my $osm = '';
-  my $osm_node = '';
-  my $nb_ok = 0;
-  my $nb_ordre = 0;
-  my $osm_ref = '';
-  my $nb_ref = 0;
-  $nb_stops = scalar(@stops);
-  $nb_nodes = scalar(@nodes);
-  $self->{DEBUG} = 1;
-  for $i ( 1 .. $nb_stops ) {
-    if ( ! $arrets->{$i}->{stop}->{stop_name} or $arrets->{$i}->{stop}->{stop_name} =~ m{^\s*$} ) {
-      confess "relation_route_gtfs() name absent";
-    }
-    my $stop_name = name_norm($arrets->{$i}->{stop}->{stop_name});
-    my $stop_ref = $arrets->{$i}->{stop}->{stop_id};
-# recherche dans les nodes de la relation
-    my $i_node = 0;
-    for my $j ( 1 .. $nb_nodes ) {
-#      confess Dumper $arrets->{$j}->{node}->{tags};
-      my $node_name = name_norm($arrets->{$j}->{node}->{tags}->{name});
-      my $node_ref = $arrets->{$j}->{node}->{tags}->{ref};
-      if ( ! defined $node_ref ) {
-        $node_ref = $arrets->{$j}->{node}->{tags}->{$self->{k_ref}};
-      }
-#      warn "bus_stop() n$node->{id} *** k_ref $node->{tags}->{name} " . $node->{tags}->{$self->{k_ref}};
-
-#      warn "node $j " . $arrets->{$j}->{node}->{tags}->{ref} . " $node_name";
-      if ( $stop_ref eq $node_ref ) {
-        $i_node = $j;
-        last;
-      }
-      if ( $stop_name eq $node_name && $stop_ref eq $node_ref ) {
-        $i_node = $j;
-        last;
-      }
-    }
-#    warn "stops $i $i_node $stop_ref $stop_name"; exit;
-# on l'a trouvé ?
-    if ( $i_node > 0 ) {
-      if ( $self->{DEBUG} > 1 ) {
-        warn "node === name:" . $arrets->{$i}->{stop}->{stop_name} . " $i # " . $i_node . " ref:" . $arrets->{$i}->{stop}->{stop_id} . " n" . $arrets->{$i_node}->{node}->{id};
-      }
-      $nb_ok++;
-      if ( $i_node == $i ) {
-        $nb_ordre++;
-      }
-# meme ref
-      my $id = '';
-      if ( defined $arrets->{$i_node}->{node}->{tags}->{ref}
-        && $arrets->{$i_node}->{node}->{tags}->{ref} eq $arrets->{$i}->{stop}->{stop_id}
-        && $arrets->{$i_node}->{node}->{tags}->{'highway'} eq 'bus_stop'
-      ) {
-        $id = $arrets->{$i_node}->{node}->{id};
-      } else {
-        warn "osm: " . $arrets->{$i_node}->{node}->{tags}->{ref} . " gtfs " . $arrets->{$i}->{stop}->{stop_id};
-        warn Dumper $arrets->{$i_node}->{node};
-        confess;
-# modification du tag, très mauvaise idéee
-#        my $node_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'node', $arrets->{$i_node}->{node}->{id}));
-#        my $tags;
-#        $tags->{ref} = $arrets->{$i}->{stop}->{stop_id};
-#        $osm_ref .= $self->{oOSM}->modify_tags($node_osm, $tags, qw(ref)) . "\n";
-
-        my $n = $self->osm_nodes_bus_stop_ref( $arrets->{$i}->{stop}->{stop_id} );
-#        confess Dumper $n;
-        $id = $n->{id};
-        $nb_ref++;
-      }
-#      confess Dumper $arrets->{$i_node}->{node};
-      $osm .= '    <member type="node" ref="' . $id . '" role="platform"/>' . "\n";
-      next;
-    }
-#    confess Dumper $arrets->{$i}->{stop};
-# on recherche le node avec cette référence
-    warn "node recherche node " . $arrets->{$i}->{stop}->{stop_name} . ", " . $arrets->{$i}->{stop}->{stop_id};
-    my $ok = 0;
-    my $n = $self->osm_nodes_bus_stop_ref( $arrets->{$i}->{stop}->{stop_id} );
-    if ( $n ) {
-      my $id = $n->{id};
-      $nb_ref++;
-      $osm .= '    <member type="node" ref="' . $id . '" role="platform"/>' . "\n";
-      $ok = 1;
-    }
-
-    if ( $ok == 0 ) {
-#      confess Dumper $arrets->{$i}->{stop};
-      $osm_node .= $self->{oOSM}->node_stop($arrets->{$i}->{stop});
-    }
-  }
-  warn "relation_route_gtfs() nb_stops: $nb_stops nb_nodes: $nb_nodes nb_ordres: $nb_ordre nb_ok: $nb_ok nb_ref:$nb_ref";
-  $self->{'log'} .= "relation_route_gtfs() ref:" . $relation->{tags}->{ref}  .  " iti:$iti_ok ref:$self->{network}:" . $relation->{tags}->{"ref:fr_star"}  . " r" . $relation->{id} . "\n";
-  $self->{'log'} .= "relation_route_gtfs() " . "nb_stops: $nb_stops nb_nodes: $nb_nodes nb_ordres: $nb_ordre nb_ok: $nb_ok nb_ref:$nb_ref" . "\n";
-#
-# forcage de la ref dans les nodes
-#  if ( $nb_ok == $nb_stops  && $nb_stops == $nb_nodes && $nb_ordre == $nb_stops && $osm_ref ne '' ) {
-#    $self->{oAPI}->changeset($osm_ref, 'maj Keolis septembre 2014', 'modify');
-#  }
-#  return;
-  if ( $nb_ok == $nb_stops  && $nb_stops == $nb_nodes && $nb_ordre == $nb_stops && $nb_ref == 0) {
-    warn "\n\n\n*** identiques ref:" . $relation->{tags}->{ref}. " r" . $relation->{id}. "\n\n\n";
-    print "ok " . $relation->{tags}->{ref} . " r" . $relation->{id} .   "\n";
-    warn sprintf("relation_route_gtfs() fin");
-    $self->{'log'} .= "relation_route_gtfs() identiques fin\n";
-    return 0;
-  }
-  print "*** " . $relation->{tags}->{ref} . "\n";
-  $self->{oAPI}->changeset($osm_node, $self->{osm_commentaire}, 'create');
-  warn sprintf("relation_route_gtfs() ref:%s;%s;%s;%s", $relation->{id}, $relation->{tags}->{ref}, $relation->{user}, $relation->{timestamp});
-  if ( $osm ne '' ) {
-    my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
-    $osm = $self->{oOSM}->relation_replace_member($relation_osm, '<member type="node" ref="\d+" role="[^"]*"/>', $osm);
-    if ( $osm !~ m{<relation} ) {
-      confess "relation_route_gtfs() $relation_osm";
-    }
-    $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'modify');
-    $self->{'log'} .= "relation_route_gtfs() ***delta\n";
-  }
-  warn sprintf("relation_route_gtfs() fin");
-#  confess;
-  return 1;
-}
 sub test_osm_bus_stop_around {
   my $self = shift;
   my( $ok, $i, $arrets, $osm);
@@ -1096,33 +338,112 @@ sub relation_routes_tags {
     $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'modify');
   }
 }
-sub relation_routes_platform {
+#
+# analyse des members d'une relation route
+sub relation_routes_members {
   my $self = shift;
-  my $hash = $self->oapi_get("(relation[network=". $self->{network} . "][type=route]['route'='bus']);out meta;", "$self->{cfgDir}/routes_platform.osm");
+  my $hash = $self->oapi_get("relation[network='". $self->{network} . "'][type=route]['route'='bus'];out meta;", "$self->{cfgDir}/routes_platform.osm");
   foreach my $relation (sort tri_tags_ref @{$hash->{relation}}) {
-    warn sprintf("relations_route_wfs() r%s;ref:%s;%s;%s", $relation->{id}, $relation->{tags}->{ref}, $relation->{user}, $relation->{timestamp});
+    my $k_ref = $relation->{tags}->{$self->{k_ref}};
+    if ($k_ref !~ m{^0[1]} ) {
+      next;
+    }
+    warn sprintf("relations_route_members() r%s ref:%s %s %s", $relation->{id}, $k_ref, $relation->{user}, $relation->{timestamp});
+#    next;
     $self->{id} = $relation->{id};
-    $self->relation_route_platform();
+    $self->relation_route_members();
   }
 }
-sub relation_route_platform {
+sub relation_route_members {
   my $self = shift;
   my $id = $self->{'id'};
-  warn "relation_route_platform() id:$id";
-  my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $id));
-  if ( $relation_osm =~m{role="platform"} ) {
-    return;
+  warn "relation_route_members() id:$id";
+  my $hash = $self->api_get('relation', $id);
+#  confess Dumper $hash;
+  my $relation = $hash->{relation}[0];
+  my (@stop, @platform, @way, $nodes);
+#  confess Dumper $relation;
+  for my $member ( @{$relation->{member}} ) {
+    if ( $member->{role} =~ m{^stop} ) {
+      push @stop, $member;
+      next;
+    }
+    if ( $member->{role} =~ m{^platform} ) {
+      push @platform, $member;
+      next;
+    }
+    if ( $member->{role} =~ m{^$} ) {
+      push @way, $member;
+      my $id = $member->{ref};
+      my $way = $hash->{osm}->{way}->{$id};
+#      confess Dumper $way;
+      for my $node ( @{$way->{nodes}} ) {
+        $nodes->{$node}++;
+      }
+      next;
+    }
+    confess Dumper $member;
   }
-  $self->relation_bus_stop();
-  my $osm_members = '';
-  foreach my $node ( @{$self->{stops}} ) {
-#    confess Dumper $node;
-    $osm_members .= '    <member type="node" ref="' . $node->{id} . '" role="platform"/>' . "\n";
+  warn sprintf("relation_route_members() stop:%s platform:%s way:%s nodes:%s", scalar(@stop), scalar(@platform), scalar(@way), scalar(keys %{$nodes}));
+  for my $member ( @stop ) {
+    if ( defined $nodes->{$member->{ref}} ) {
+      next;
+    }
+    warn "***stop # parcours";
+    warn Dumper $member;
+    my $id = $member->{ref};
+    my $node = $hash->{osm}->{node}->{$id};
+    warn Dumper $node;
   }
-  warn $osm_members;
-  my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $id));
-  my $osm = $self->{oOSM}->relation_replace_member($relation_osm, '<member type="node" ref="\d+" role="platform"/>', $osm_members);
-  $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'modify');
+# https://gis.stackexchange.com/questions/11409/calculating-the-distance-between-a-point-and-a-virtual-line-of-two-lat-lngs
+# une plateforme n'appartient pas au parcours
+  for my $member ( @platform ) {
+    my $id = $member->{ref};
+    my $node = $hash->{osm}->{node}->{$id};
+    if ( defined $nodes->{$member->{ref}} ) {
+      warn "***platform";
+      warn Dumper $member;
+      warn Dumper $node;
+      next;
+    }
+    my $distance = 10000;
+    for my $id (keys %{$nodes} ) {
+      my $node1 = $hash->{osm}->{node}->{$id};
+      my $d = haversine_distance_meters($node->{lat}, $node->{lon}, $node1->{lat}, $node1->{lon});
+      if ( $d < $distance ) {
+        $distance = $d;
+      }
+    }
+    if ($distance > 150 ) {
+      warn "***platform $distance";
+      warn Dumper $member;
+      warn Dumper $node;
+      next;
+    }
+  }
+#  confess "***fin***";
+}
+sub api_get {
+  my $self = shift;
+  my ($type, $id) = @_;
+  my $f_osm = sprintf("%s/%s_%s.osm", $self->{cfgDir}, $type, $id);
+#  warn "api_get() f_osm: ". $f_osm;
+  my ($osm);
+#  $f_osm = "$self->{cfgDir}/relations_routes.osm";
+  if ( ! -f "$f_osm" or  $self->{DEBUG_GET} > 0 ) {
+    my $get = sprintf("https://www.openstreetmap.org/api/0.6/%s/%s/full", $type, $id);
+#    warn $get;
+    $osm = get($get);
+    open(OSM, ">:utf8",  $f_osm) or die "osm_get() erreur:$!";
+    print(OSM $osm);
+    close(OSM);
+  } else {
+    $osm = do { open my $fh, '<:utf8', $f_osm or die $!; local $/; <$fh> };
+  }
+#  confess $osm;
+  my $hash = $self->{oOSM}->osm2hash($osm);
+  warn "api_get() $f_osm nb_r:" . scalar(@{$hash->{relation}}) . " nb_w:" . scalar(@{$hash->{way}}) . " nb_n:" . scalar(@{$hash->{node}});
+  return $hash;
 }
 sub hexdump {
   my $data = shift;

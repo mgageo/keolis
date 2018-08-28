@@ -7,10 +7,31 @@ use utf8;
 use strict;
 use Carp;
 use Data::Dumper;
+use JSON qw(decode_json);
+our ( $gtfs_iti, $ref, $hash, $relation_stops);
 #
-# pour les stops : diffrénce entr osm et l'open data
+#
+sub star_nodes_stops_old {
+  my $self = shift;
+  warn "star_nodes_stops_diff() debut";
+  my $table = 'star_pointsarret';
+  my $network = $self->{network};
+  my $hash_node = $self->{oOAPI}->osm_get("node(area:3602005861)['highway'=bus_stop]['ref:FR:STAR']->.a;.a << ->.relations;.relations >> ->.b;(.a; - .b;)->.c;.c;out meta;", "$self->{cfgDir}/nodes_stops_old.osm");
+  my $osm_delete = '';
+  my $nb_delete = 0;
+  my $josm = '';
+  foreach my $node (sort @{$hash_node->{node}} ) {
+    $osm_delete .= $self->{oOSM}->node_delete($node);
+    $josm .= ',n' . $node->{id};
+  }
+#  $self->{oAPI}->changeset($osm_delete, $self->{source}, 'delete');
+  warn$josm;
+}
+#
+# pour les stops : différence entre osm et l'open data
 #
 #  ref:FR:STAR =
+# perl scripts/keolis.pl --DEBUG 0 --DEBUG_GET 0 star star_nodes_stops_diff
 sub star_nodes_stops_diff {
   my $self = shift;
   warn "star_nodes_stops_diff() debut";
@@ -20,7 +41,6 @@ sub star_nodes_stops_diff {
   my $hash_stop = $self->{oOAPI}->osm_get("node(area:3602005861)['highway'='bus_stop'];out meta;", "$self->{cfgDir}/star_relations_bus_stop.osm");
 
   $self->{oDB}->table_select($table, '', 'ORDER BY code');
-  my $osm_create = '';
 #
 # on indexe
   warn "star_nodes_stops_diff() indexation osm nodes";
@@ -35,6 +55,12 @@ sub star_nodes_stops_diff {
 #        warn Dumper $node;
       next;
     }
+    if ( defined $self->{stops}->{$ref}->{osm} ) {
+      warn "*** meme ref n" . $node->{id} . ',n' . $self->{stops}->{$ref}->{osm}->{id};
+      warn Dumper $node;
+      warn Dumper $self->{stops}->{$ref}->{osm};
+      next;
+    }
     $self->{stops}->{$ref}->{osm} = $node;
   }
   warn "star_nodes_stops_diff() indexation star";
@@ -42,13 +68,47 @@ sub star_nodes_stops_diff {
     my $ref = $row->{'code'};
     $self->{stops}->{$ref}->{star} = $row;
   }
+#
+# on recherche les différences
+  my $osm_create = '';
+  my $osm_delete = '';
+  my $osm_modify = '';
+  my $nb_create = 0;
+  my $nb_delete = 0;
+  my $nb_modify = 0;
+  my $josm = '';
   for my $ref ( sort keys %{$self->{stops}} ) {
+    if ( defined $self->{stops}->{$ref}->{osm} && defined $self->{stops}->{$ref}->{star}) {
+      my $node = $self->{stops}->{$ref}->{osm};
+      my $star = $self->{stops}->{$ref}->{star};
+      my $coordonnees =  $star->{coordonnees};
+      my ($lat, $lon) = ( $coordonnees =~ m{(\S+),\s(\S+)} );
+      my $d = haversine_distance_meters($node->{lat}, $node->{lon}, $lat, $lon);
+      if ( $d > 50 ) {
+        warn "*** distance: $d";
+        warn Dumper $self->{stops}->{$ref};
+        $nb_modify++;
+        my $node_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'node', $node->{id}));
+        $osm_modify .= $self->{oOSM}->modify_latlon($node_osm, $lat, $lon) . "\n";
+      }
+      if ( $node->{tags}->{name} ne $star->{nom} ) {
+        warn "n$node->{id} $node->{tags}->{name} ne $star->{nom}";
+#        confess Dumper $self->{stops}->{$ref};
+      }
+      next;
+    }
     if ( defined $self->{stops}->{$ref}->{osm} ) {
+      my $node = $self->{stops}->{$ref}->{osm};
+      warn "*** pas de star n". $node->{id};
+      warn Dumper $self->{stops}->{$ref};
+      $osm_delete .= $self->{oOSM}->node_delete($node);
+      $josm .= ',n' . $node->{id};
       next;
     }
     if ( $ref =~ m{^[4569]} ) {
       next;
     }
+    next;
 #    warn Dumper $self->{stops}->{$ref};
     my $coordonnees =  $self->{stops}->{$ref}->{star}->{coordonnees};
     warn "$ref $coordonnees";
@@ -74,7 +134,12 @@ sub star_nodes_stops_diff {
     my $osm = $self->star_node_stop_create($hash);
     $osm_create .=  $osm;
   }
-  $self->{oAPI}->changeset($osm_create, 'maj Keolis aout 2018', 'create');
+  warn "star_nodes_stops_diff() difference nb_create:$nb_create nb_delete:$nb_delete nb_modify:$nb_modify";
+#  $self->{oAPI}->changeset($osm_create, 'maj Keolis aout 2018', 'create');
+#  $self->{oAPI}->changeset($osm_delete, $self->{source}, 'delete');
+  $self->{oAPI}->changeset($osm_modify, $self->{source}, 'modify');
+  warn "josm:\n$josm";
+
 }
 #
 # création d'un node bus_stop à partir des données Keolis opendata
@@ -170,7 +235,7 @@ sub star_parcours_diff {
   }
 }
 #
-#mise à jour de la relation route à partir des données open data
+# mise à jour de la relation route à partir des données open data
 sub star_parcours_diff_parcours {
   my $self = shift;
   warn "star_parcours_diff_parcours() debut";
@@ -216,7 +281,7 @@ sub star_parcours_diff_parcours {
   }
 }
 #
-# pour mettre en place les stops sur les relations
+# pour mettre en place les members platform sur les relations
 sub star_relations_stops_diff {
   my $self = shift;
   warn "star_relations_stops_diff() debut";
@@ -269,17 +334,19 @@ sub star_relations_stops_diff {
     }
     printf("%s\n", $idligne);
     if ( ! defined $idlignes->{$idligne}->{'osm'}) {
-      printf("\t%s\n", "absente osm");
+      printf("\t%s type: %s\n", "absente osm", $idlignes->{$idligne}->{star}->{type});
+#      warn Dumper $idlignes->{$idligne};
       next;
     }
     if ( ! defined $idlignes->{$idligne}->{'star'}) {
-      printf("\t%s\n", "absente star");
+      printf("\t%s %s\n", "absente star");
       confess;
     }
     if ( defined $idlignes->{$idligne}->{'osm'} && defined $idlignes->{$idligne}->{'star'}) {
       $self->star_stops_diff_stops($idlignes->{$idligne});
     }
   }
+  warn "star_relations_stops_diff() fin";
 }
 #
 # mise en place des stops si besoin
@@ -311,6 +378,10 @@ sub star_stops_diff_stops {
   }
   my $refs = join(',', @refs);
   warn  "osm:  " . $refs;
+  if ( $refs eq $star->{stops} && $refs eq '') {
+    warn  "****";
+    return;
+  }
 # rien à faire si identique
   if ( $refs eq $star->{stops} ) {
     return;
@@ -355,311 +426,6 @@ sub get_relation_route_member_platform {
     push @nodes, $member->{ref};
   }
   return @nodes;
-}
-#
-# pour les différentes lignes
-sub star_routes_shapes_diff {
-  my $self = shift;
-  warn "routes_shapes_diff() debut";
-  $self->{oDB}->table_select('star_parcours_stops_lignes');
-  my $star_parcours = $self->{oDB}->{table}->{'star_parcours_stops_lignes'};
-  my $gtfs_stops = $self->gtfs_stops_getid();
-  my ($shapes, $routes);
-#  confess Dumper $trips;
-#
-# on indexe
-  for my $parcours ( @{$star_parcours} ) {
-    if ( $parcours->{'idligne'} >= 200 ) {
-#      next;
-    }
-    $shapes->{$parcours->{'code'}}->{star} = $parcours;
-    my $route = substr($parcours->{'code'}, 0, 4);
-    push @{$routes->{$route}}, $parcours->{'code'};
-  }
-#
-# on vérifier l'indexation
-#
-# la liste par shape_id
-  foreach my $shape_id ( sort keys %{$shapes} ) {
-    my $nb = scalar(keys(%{$shapes->{$shape_id}}));
-    if ( $nb != 1 ) {
-      printf("%-30s %d\n", $shape_id, $nb);
-      warn Dumper $shapes->{$shape_id};
-    }
-  }
-#  confess Dumper $routes->{'0011'};
-  my $network = $self->{network};
-  $self->{hash_route} = $self->{oOAPI}->osm_get("relation[network='${network}'][type=route][route=bus];>>;out meta;", "$self->{cfgDir}/relation_routes_bus.osm");
-#
-# on fait plusieurs passes
-# - on détermine les stops osm
-  foreach my $relation (sort tri_tags_refstar @{$self->{hash_route}->{relation}}) {
-#    if ( $relation->{user} ne 'mga_geo' ) {
-#      next;
-#    }
-#    if ( $relation->{timestamp} !~ m{^2017\-10\-17T05} ) {
-#      next;
-#    }
-#    warn "relation : " . $relation->{id};
-#    warn Dumper $relation->{tags};
-#    next;
-    my $tags = $relation->{tags};
-    if ( $tags->{'ref'} =~ /^2\d\d/ ) {
-#      warn sprintf("*** ref %s", $tags->{'ref:FR:STAR'});
-#      next;
-    }
-    if ( not defined $tags->{'ref:FR:STAR'} ) {
-      warn sprintf("*** ref r%s %s", $relation->{id}, $tags->{'ref'});
-      $tags->{'ref:FR:STAR'} = sprintf("%04d", $tags->{'ref'});
-      next;
-    }
-    if ( $tags->{'ref:FR:STAR'} =~ /^02\d\d/ ) {
-#      warn sprintf("*** ref:FR:STAR %s", $tags->{'ref:FR:STAR'});
-#      next;
-    }
-    if ( $tags->{'ref:FR:STAR'} =~ /^\d+\-[AB]/ ) {
-      warn sprintf("*** ref %s", $tags->{'ref:FR:STAR'});
-#      next;
-    }
-#    warn Dumper $tags;
-    my $shape_id =  $tags->{'ref:FR:STAR'};
-#    warn sprintf("r%s %s", $relation->{id}, $shape_id);
-    my $nodes_ref = $self->route_stops_get($relation);
-    $shapes->{$shape_id}->{osm}->{stops} = $nodes_ref;
-#
-# liste identique ?
-    my $s = "ok";
-    if (  $shapes->{$shape_id}->{star}->{stops} ne $nodes_ref ) {
-      $s = "ko";
-#    warn $shapes->{$shape_id}->{star}->{stops};
-#    warn $nodes_ref;
-#    confess Dumper  $shapes->{$shape_id};
-#      next;
-    }
-    $shapes->{$shape_id}->{stops} = $s;
-    push @{$shapes->{$shape_id}->{relations}}, $relation;
-  }
-#  confess;
-#
-# la liste par shape_id
-  foreach my $shape_id ( sort keys %{$shapes} ) {
-#    confess Dumper $shapes->{$shape_id};
-    my $type = '???';
-    if ( defined $shapes->{$shape_id}->{star} ) {
-      $type = $shapes->{$shape_id}->{star}->{type};
-    }
-    my $nb = 0;
-    my $s = "";
-    my $relation = '';
-    if ( defined $shapes->{$shape_id}->{relations} ) {
-      $nb = scalar(@{$shapes->{$shape_id}->{relations}});
-      $s = $shapes->{$shape_id}->{stops};
-      $relation = $shapes->{$shape_id}->{relations}[0];
-    }
-    my $ok = '';
-    if ( $nb == 0 && $type eq 'Principal') {
-      $ok = '***';
-    }
-    printf("%-30s %d %s %s %s\n", $shape_id, $nb, $type, $ok, $s);
-    if ( $nb == 1 && $s eq "ko" && $type ne "") {
-      $self->{shape} = $shape_id;
-      $self->star_route_shape_stops();
-    }
-    if ( $nb == 1 && $s eq "ko" && $type ne "") {
-      warn "*** pb stops type:$type $shape_id " . $relation->{id};
-      warn "gtfs : " . $shapes->{$shape_id}->{star}->{stops};
-      warn "osm  : " . $shapes->{$shape_id}->{osm}->{stops};
-#      confess Dumper $shapes->{$shape_id};
-      if ( $shapes->{$shape_id}->{star}->{stops} =~ m{^08\d+} ) {
-        $self->{shape} = $shape_id;
-        $self->route_shape_stops();
-      }
-#       $self->route_shape_tags($relation, $shapes->{$shape_id}->{star});
-    }
-    if ( $nb == 1 && $s eq "ko" && $type eq "") {
-      warn "*** pb stops type:$type $shape_id " . $relation->{id};
-      warn "gtfs : " . $shapes->{$shape_id}->{star}->{stops};
-      warn "osm  : " . $shapes->{$shape_id}->{osm}->{stops};
-#      confess Dumper $shapes->{$shape_id};
-      if ( $shapes->{$shape_id}->{star}->{stops} =~ m{^\d+} ) {
-        $self->{shape} = $shape_id;
-        $self->route_shape_stops();
-      }
-#       $self->route_shape_tags($relation, $shapes->{$shape_id}->{star});
-    }
-  }
-  confess;
-  foreach my $relation (sort tri_tags_refstar @{$self->{hash_route}->{relation}}) {
-#  confess Dumper $shapes;
-    my $tags = $relation->{tags};
-    if ( $tags->{'ref'} =~ /^2\d\d/ ) {
-#      warn sprintf("*** ref %s", $tags->{'ref:FR:STAR'});
-#      next;
-    }
-    if ( not defined $tags->{'ref:FR:STAR'} ) {
-      warn sprintf("*** ref r%s %s", $relation->{id}, $tags->{'ref'});
-      $tags->{'ref:FR:STAR'} = sprintf("%04d", $tags->{'ref'});
-      next;
-    }
-    if ( $tags->{'ref:FR:STAR'} !~ /^02\d\d/ ) {
-#      warn sprintf("*** ref %s", $tags->{'ref:FR:STAR'});
-      next;
-    }
-    if ( $tags->{'ref:FR:STAR'} =~ /^\d+\-[AB]/ ) {
-#      warn sprintf("*** ref %s", $tags->{'ref:FR:STAR'});
-#      next;
-    }
-#    warn Dumper $tags;
-    if (not defined $shapes->{ $tags->{'ref:FR:STAR'}} ) {
-      warn Dumper $tags;
-#      next;
-    }
-#    warn Dumper $shapes->{ $tags->{'ref:FR:STAR'}};
-    my $shape_id =  $tags->{'ref:FR:STAR'};
-    warn sprintf("r%s %s",$relation->{id}, $shape_id);
-    my $nodes_ref = $self->route_stops_get($relation);
-    if (  $shapes->{$shape_id}->{star}->{stops} eq $nodes_ref ) {
-      next;
-    }
-    warn "\t" . $shapes->{$shape_id}->{star}->{stops};
-    warn "\t" . $nodes_ref;
-    my @arrets;
-    my @stops = split(',', $shapes->{$shape_id}->{star}->{stops});
-    my $i = 0;
-    foreach my $stop (@stops) {
-      $arrets[$i]->{gtfs} = $stop;
-      $arrets[$i++]->{gtfs_name} = $gtfs_stops->{$stop}->{'stop_name'};
-    }
-    @stops = split(',', $nodes_ref);;
-    $i = 0;
-    foreach my $stop (@stops) {
-      $arrets[$i]->{osm_name} = $gtfs_stops->{$stop}->{'stop_name'};
-      $arrets[$i++]->{osm} = $stop;
-    }
-#
-# la liste des shapes de cette route
-    my $j = 0;
-    my $route = substr($shape_id, 0, 4);
-    my @routes;
-    foreach my $route ( @{$routes->{$route}} ) {
-#      warn "route:$route shape_id:$shape_id";
-      if ( $route eq $shape_id ) {
-        next;
-      }
-      if ( scalar(@{$shapes->{$route}->{relations}}) > 0 ) {
-        next;
-      }
-#      warn "route:$route";
-      push @routes, $route;
-    }
-#    confess Dumper \@routes;
-    foreach my $route (@routes) {
-      $i = 0;
-      @stops = split(',', $shapes->{$route}->{star}->{stops});
-      foreach my $stop (@stops) {
-        $arrets[$i]->{"osm_name_$j"} = $gtfs_stops->{$stop}->{'stop_name'};
-        $arrets[$i++]->{"osm_$j"} = $stop;
-      }
-      $j++;
-    }
-#    confess Dumper \@arrets;
-    printf("\t%4s %4s % 25s % 25s", "osm", "gtfs", $shape_id, $shape_id);
-#    warn "j:$j";
-    for $i ( 0 .. $j-1 ) {
-      printf(" %25s",  $routes[$i]);
-    }
-    printf("\n");
-    foreach my $arret (@arrets) {
-#      confess Dumper $arret;
-      printf("\t%4s %4s % 25s % 25s", $arret->{osm}, $arret->{gtfs}, $arret->{osm_name}, $arret->{gtfs_name});
-      for $i ( 0 .. $j-1 ) {
-        printf(" %25s",  $arret->{"osm_name_$i"});
-      }
-      printf("\n");
-    }
-#    last;
-  }
-}
-
-#
-# pour mettre en place les stops sur une relation
-sub star_route_shape_stops {
-  my $self = shift;
-  warn "route_shape_stops() debut";
-#  confess Dumper $self;
-  $self->{oDB}->table_select('star_parcours_stops_lignes');
-  my $star_parcours = $self->{oDB}->{table}->{'star_parcours_stops_lignes'};
-  my $gtfs_stops = $self->gtfs_stops_getid();
-  my ($shapes, $routes);
-#  confess Dumper $trips;
-  for my $parcours ( @{$star_parcours} ) {
-    $shapes->{$parcours->{'id'}} = $parcours;
-  }
-  if ( not defined $shapes->{$self->{shape}} ) {
-    warn "route_shape_stops() *** shape absent $self->{shape}";
-    return;
-  }
-#  confess Dumper $routes->{'0011'};
-  my $network = $self->{network};
-  $self->{hash_route} = $self->{oOAPI}->osm_get("relation[network='${network}'][type=route][route=bus]['" . $self->{k_ref} . "'='" . $self->{shape} . "'];>>;out meta;", "$self->{cfgDir}/route_shape_stops.osm", 1);
-  my $nb = scalar(@{$self->{hash_route}->{relation}});
-  warn "route_shape_stops() " . $self->{shape} . " nb : $nb";
-  if ( $nb == 0 ) {
-    warn "route_shape_stops() relations nb : $nb";
-    $self->{hash_route} = $self->{oOAPI}->osm_get("relation(" . $self->{id} . ");>>;out meta;", "$self->{cfgDir}/route_shape_stops.osm");
-  }
-  $nb = scalar(@{$self->{hash_route}->{relation}});
-  if ( $nb != 1 ) {
-    warn "route_shape_stops() relations nb : $nb";
-    confess;
-  }
-#  exit;
-  my $relation = @{$self->{hash_route}->{relation}}[0];
-  my $tags = $relation->{tags};
-  if (not defined $tags->{'ref:FR:STAR'} ) {
-    warn Dumper $tags;
-    confess;
-  }
-#  $self->route_shape_tags($relation,  $shapes->{$self->{shape}});  return;
-  my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
-  $relation_osm = $self->{oOSM}->delete_osm($relation_osm);
-  if ($tags->{'ref:FR:STAR'} ne $self->{shape} ) {
-    warn "route_shape_stops() ref ", $tags->{'ref:FR:STAR'}, $self->{shape};
-    warn Dumper $tags;
-    confess;
-    my $t = {
-      $self->{k_ref} => $self->{shape},
-      'source' => $self->{source}
-    };
-    $relation_osm = $self->{oOSM}->modify_tags($relation_osm, $t, qw(ref:FR:STAR source)) . "\n";
-#    confess Dumper $tags;
-  }
-  my $osm_stops = $self->get_relation_route_member_stops($relation);
-  my $gtfs_stops = $shapes->{$self->{shape}}->{stops};
-  warn "route_shape_stops() osm  $osm_stops";
-  warn "route_shape_stops() gtfs $gtfs_stops";
-  if ( $osm_stops eq $gtfs_stops ) {
-    return;
-  }
-  warn "route_shape_stops() delta ***";
-  $self->{hash_stops} = $self->oapi_get("node['highway'='bus_stop']['" . $self->{k_ref} . "'];out meta;", "$self->{cfgDir}/route_shape_stops_node.osm");
-  my $refs;
-  foreach my $node (@{$self->{hash_stops}->{node}}) {
-    $refs->{$node->{tags}->{$self->{k_ref}}} = $node;
-  }
-  my @stops = split(',', $gtfs_stops);
-  my $i = 0;
-  my $osm = '';
-  foreach my $stop (@stops) {
-    if ( not defined $refs->{$stop} ) {
-      warn "route_shape_stops() $stop";
-      confess;
-    }
-    $osm .= '    <member type="node" ref="' . $refs->{$stop}->{id} . '" role="platform"/>' . "\n";
-    $relation_osm = $self->{oOSM}->relation_replace_member($relation_osm, '<member type="node" ref="\d+" role="platform[^"]*"/>', $osm);
-  }
-#  confess "route_shape_stops()\n $osm";
-  $self->{oAPI}->changeset($relation_osm, $self->{osm_commentaire}, 'modify');
 }
 #
 # pour mettre en place les tags sur une relation
@@ -753,173 +519,135 @@ sub start_relation_route_creer {
   warn $osm;
   $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'create');
 }
-
 #
-# pour mettre en place "ref:star"
-sub star_parcours_diff_v2 {
+# pour lire les parcours en format geojson
+sub star_parcours_geojson_lire {
   my $self = shift;
-  warn "star_parcours_diff() debut";
-  my $table = 'star_parcours';
+  my $dsn ='d:/web.var/geo/STAR/tco-bus-topologie-parcours-td.geojson';
+  my $content = do { open my $fh, '<', $dsn or die $!; local $/; <$fh> };
+  my $decoded_json = decode_json($content);
+#  confess Dumper $decoded_json;
+  my $features = $decoded_json->{features};
+  for my $feature ( @{$features} ) {
+#    confess Dumper $feature->{properties};
+    $self->{geojson}->{$feature->{properties}->{code}} = $feature;
+  }
+  warn "star_parcours_geojson_lire() nb:" .scalar(keys %{ $self->{geojson}});
+
+}
+#
+# pour les relations route : lecture osm
+sub star_relations_routes_lire {
+  my $self = shift;
   my $network = $self->{network};
-  my $hash_route = $self->{oOAPI}->osm_get("relation[network=${network}][type=route][route=bus];out meta;", "$self->{cfgDir}/relation_routes_bus.osm");
-  $self->start_parcours_get($table);
-  my $osm = '';
-  foreach my $relation (@{$hash_route->{relation}}) {
+  $self->{hash} = $self->{oOAPI}->osm_get("relation[network='${network}'][type=route][route=bus];>>;out meta;", "$self->{cfgDir}/star_relations_routes.osm");
+#  confess Dumper $self->{hash};
+}
+#
+# pour les relations route : différence entre osm et open data pour le parcous
+sub star_relations_parcours_diff {
+  my $self = shift;
+  $self->star_parcours_geojson_lire();
+  $self->star_relations_routes_lire();
+  my ( $codes );
+  my $josm = '';
+#
+# on indexe
+  foreach my $relation (@{$self->{hash}->{relation}}) {
 #    confess Dumper $relation;
     my $tags = $relation->{tags};
-    if ( $tags->{ref} =~ /^Ts/ ) {
+    $tags->{id} = $relation->{id};
+    if ( defined $tags->{FIXME} ) {
       next;
     }
-    if ( $tags->{ref} !~ /^C4/ ) {
-#      next;
-    }
-    if ( not defined $tags->{'description'} or not defined $tags->{'description'} ) {
-      confess Dumper $tags;
-    }
-    warn sprintf("%s %s from:%s to:%s id:%s", $tags->{'ref'}, $tags->{'description'}, $tags->{'from'}, $tags->{'to'}, $relation->{'id'});
-    for my $row ( @{$self->{oDB}->{table}->{$table}} ) {
-      if ( $tags->{'ref'} ne $row->{'nomcourtlig'} ) {
-        next;
-      }
-      if ( $tags->{'from'} ne $row->{'nomarretdep'} ) {
-        next;
-      }
-      if ( $tags->{'to'} ne $row->{'nomarretarr'} ) {
-        next;
-      }
-      if (  $tags->{'ref:star'} && $tags->{'ref:star'} eq $row->{'code'} ) {
-        next;
-      }
-      if (  $row->{'code'} !~ m{\-01\-[AB]$} ) {
-        next;
-      }
-      warn sprintf("\t%s %s from:%s to:%s", $tags->{'ref'}, $tags->{'ref:star'}, $tags->{'from'}, $tags->{'to'});
-      warn sprintf("\t%s %s from:%s to:%s", $row->{'code'}, $row->{'libellelong'}, $row->{'nomarretdep'}, $row->{'nomarretarr'});
+    my $code = $tags->{'ref:FR:STAR'};
+ #   warn $code;
+    if ( $code !~ m{^0[01]} ) {
       next;
-      my $relation_id = $relation->{'id'};
-      my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation_id));
-      $tags->{'ref:star'} =  $row->{'code'};
-      $tags->{'source'} =  $self->{'source'};
-      $osm .= $self->{oOSM}->modify_tags($relation_osm, $tags, qw(ref:star source)) . "\n";
-      $self->{oAPI}->changeset($osm, $self->{osm_commentaire} . ' modification ref:star', 'modify');
-      $osm = '';
+    }
+    $self->{codes}->{$code}->{osm} = $relation;
+  }
+  for my $code (sort keys %{ $self->{geojson}} ) {
+    $self->{codes}->{$code}->{geojson} = $self->{geojson}->{$code};
+  }
+  for my $code (sort keys %{$self->{codes}} ) {
+    if ( $code !~ m{^0[01]} ) {
+#    if ( $code !~ m{^00[23456789]} ) {
+#    if ( $code !~ m{^01[0123456789]} ) {
       next;
-      Dump $tags->{'to'};
-      Dump $row->{'nomarretarr'};
-      confess Dumper $row;
+    }
+    warn $code;
+    if ( not defined $self->{codes}->{$code}->{geojson} ) {
+      warn "*** geojson";
+      next;
+    }
+    if ( not defined $self->{codes}->{$code}->{osm} ) {
+      warn "*** osm";
+      next;
+    }
+    $josm .= $self->star_relation_parcours_diff($code);
+  }
+  warn $josm;
+}
+sub star_relation_parcours_diff {
+  my $self = shift;
+  my $code = shift;
+  my $relation = $self->{codes}->{$code}->{osm};
+  my $parcours = $self->{codes}->{$code}->{geojson};
+#  confess Dumper $osm;
+  my @ways = ();
+  if ( not defined $relation->{member} ) {
+    confess;
+  }
+# liste des ways
+  for my $member ( @{$relation->{member}} ) {
+    if ( $member->{role} ne '' ) {
+      next;
+    };
+    push @ways, $member->{ref};
+  }
+  my $lignes = '';
+  my $josm = '';
+  for my $way_id ( @ways ) {
+    my $distance = 0;
+    my $way =  $self->{hash}->{osm}->{way}->{$way_id};
+#    confess Dumper $way;
+    for my $node_id ( @{$way->{nodes}} ) {
+      my $node =  $self->{hash}->{osm}->{node}->{$node_id};
+#      confess Dumper $node;
+      my $d = $self->star_node_parcours_distance($node, $parcours);
+      if ( $d > $distance ) {
+        $distance = $d;
+      }
+    }
+    $lignes .= sprintf("\t%4d %s\n", $distance, $way->{tags}->{name});
+    if ( $distance > 500 ) {
+      warn "star_node_parcours_distance() distance: $distance";
+      warn Dumper $way;
+      printf("\n$lignes\n========================================\n");
+      $josm .= ' r' . $relation->{id} . ' ' . $relation->{tags}->{$self->{k_ref}} . '.gpx';
+      last;
     }
   }
-#  confess $osm;
+  warn "josm: $josm";
+  return $josm;
 }
-#
-#
-# pour mettre en place "ref:FR:STAR"
-sub star_parcours_ref_v2 {
+sub star_node_parcours_distance {
   my $self = shift;
-  warn "star_parcours_ref_v2() debut";
-  my $table = 'star_parcours';
-  $table = 'shapes2routes';
-  my $network = $self->{network};
-#  my $hash = $self->{oOAPI}->osm_get("relation[network='${network}'][type=route][route=bus];>>;out meta;", "$self->{cfgDir}/relation_routes_bus.osm");
-  my $hash = $self->{oOAPI}->osm_get("relation[network='${network}'][type=route][route=bus]['ref:FR:STAR'!~'0'];>>;out meta;", "$self->{cfgDir}/relation_routes_bus.osm");
-  $self->star_parcours_get_v2($table);
-  my $osm = '';
-  foreach my $relation (@{$hash->{relation}}) {
-    @{$relation->{nodes}} = ();
-    @{$relation->{ways}} = ();
-    my $nb_nodes = 0;
-    my $nb_ways = 0;
-# vérification du type des "member"
-    for my $member ( @{$relation->{member}} ) {
-      if ( $member->{type} eq 'node' ) {
-        push @{$relation->{nodes}}, $member->{ref};
-        $nb_nodes++;
-        next;
-      };
-      if ( $member->{type} eq 'way' ) {
-        push @{$relation->{ways}}, $member->{ref};
-        next;
-      };
-    }
-    if ( $nb_nodes < 3 ) {
-      next;
-    }
-# départ / arrivée
-    my $node_from = find_node($relation->{nodes}[0], $hash);
-    my $node_to = find_node($relation->{nodes}[-1], $hash);
-#   confess Dumper $node;
-#   confess Dumper $relation;
-    my $tags = $relation->{tags};
-    $tags->{'node_from'} = $node_from->{'tags'}->{'ref:FR:STAR'};
-    $tags->{'node_to'} = $node_to->{'tags'}->{'ref:FR:STAR'};
-    if ( not defined $tags->{'description'} or not defined $tags->{'ref'} or not defined $tags->{'ref:FR:STAR'} ) {
-      warn "parcours_ref_v2() description ...";
-#      warn Dumper $tags;
-#      next;
-    }
-    if ( $tags->{ref} =~ /^T/ ) {
-#      next;
-    }
-    if ( $tags->{ref} =~ /^2\d\d/ ) {
-#      next;
-    }
-    if ( $tags->{'ref:FR:STAR'} =~ /^\d+\-[AB]/ ) {
-      warn sprintf("*** ref %s %s", $tags->{'ref:FR:STAR'}, $tags->{'description'});
-      next;
-    }
-#    next;
-
-    if ( $tags->{ref} !~ /^C4/ ) {
-#      next;
-    }
-
-    warn sprintf("%s %s from:%s to:%s id: r%s", $tags->{'ref'}, $tags->{'description'}, $tags->{'from'}, $tags->{'to'}, $relation->{'id'});
-    warn sprintf("ref %s from : % s to : %s", $tags->{'ref:FR:STAR'}, $relation->{nodes}[0], $relation->{nodes}[-1]);
-    warn sprintf("ref %s from : % s to : %s", $tags->{'ref:FR:STAR'}, $node_from->{'tags'}->{'ref:FR:STAR'}, $node_to->{'tags'}->{'ref:FR:STAR'});
-    warn sprintf("ref %s from : % s to : %s", $tags->{'ref:FR:STAR'}, $node_from->{'tags'}->{'name'}, $node_to->{'tags'}->{'name'});
-    for my $row ( @{$self->{oDB}->{table}->{$table}} ) {
-      if ( $tags->{'ref'} ne $row->{'route_short_name'} ) {
-        next;
-      }
-#      warn Dumper $row;
-      warn sprintf("\tref:FR:STAR=%s from:%s to:%s", $row->{'shape_id'}, $row->{'depart_name'}, $row->{'arrivee_name'});
-#      confess;
-      if ( $tags->{'node_from'} ne $row->{'depart_id'} ) {
-        next;
-      }
-      if ( $tags->{'node_to'} ne $row->{'arrivee_id'} ) {
-        next;
-      }
-      if (  $tags->{'ref:star'} && $tags->{'ref:star'} eq $row->{'code'} ) {
-#        next;
-      }
-      if (  $row->{'code'} !~ m{\-01\-[AB]$} ) {
-#        next;
-      }
-      warn sprintf("\t%s %s from:%s to:%s", $tags->{'ref'}, $tags->{'ref:FR:STAR'}, $tags->{'from'}, $tags->{'to'});
-      warn sprintf("\t%s %s from:%s to:%s", $row->{'shape_id'}, $row->{'route_long_name'}, $row->{'depart_name'}, $row->{'arrivee_name'});
-#      warn Dumper $tags;
-#      next;
-      my $relation_id = $relation->{'id'};
-      my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation_id));
-      $tags->{'ref:FR:STAR'} =  $row->{'shape_id'};
-      $tags->{'source'} =  $self->{'source'};
-      $osm .= $self->{oOSM}->modify_tags($relation_osm, $tags, qw(ref:FR:STAR source)) . "\n";
-      $self->{oAPI}->changeset($osm, $self->{osm_commentaire} . ' modification ref:FR:STAR', 'modify');
-      $osm = '';
-      next;
-      Dump $tags->{'to'};
-      Dump $row->{'nomarretarr'};
-      confess Dumper $row;
+  my $node = shift;
+  my $parcours = shift;
+#  confess Dumper $parcours;
+  my $coordinates = $parcours->{'geometry'}->{'coordinates'};
+#  confess Dumper $coordinates;
+  my $distance = 100000;
+  for my $coor ( @$coordinates ) {
+    my ( $lon, $lat ) = @$coor;
+#    warn " $lon, $lat";
+    my $d = haversine_distance_meters($node->{lat}, $node->{lon}, $lat, $lon);
+    if ( $d < $distance ) {
+      $distance = $d;
     }
   }
-#  confess $osm;
-}
-# récupération d'une table
-sub star_parcours_get {
-  my $self = shift;
-  my $table = shift;
-  $self->{oDB}->table_select($table, '', 'ORDER BY shape_id');
-  warn "star_parcours_get() nb:".scalar(@{$self->{oDB}->{table}->{$table}});
+  return $distance;
 }
 1;

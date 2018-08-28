@@ -174,6 +174,8 @@ perl scripts/keolis.pl --DEBUG 0 --DEBUG_GET 1 --shape 0203-B-1663-1619 star osr
 #
 # les arrêts d'une route
 perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 --id 6232486 rmat relation_bus_stop
+# controle des members
+perl scripts/keolis.pl --DEBUG 0 --DEBUG_GET 1 star relation_routes_members
 #
 # pour le Réseau Malo Agglomération Transport
 perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 rmat rmat_bus_stop_diff
@@ -226,7 +228,7 @@ sub _star {
     network => 'FR:STAR',
     operator => "STAR",
     cfgDir => "TRANSPORT/STAR",
-    source => "STAR Data Explore/Rennes Métropole",
+    source => "STAR Data Explore/Rennes Metropole",
     osm_commentaire => 'maj aout 2018',
     k_route => "route",
     k_ref => 'ref:FR:STAR',
