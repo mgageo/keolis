@@ -9,6 +9,256 @@ use strict;
 #
 # les données Illenoo
 # ===================
+sub illenoo_masters_verif {
+  my $self = shift;
+  warn "illenoo_masters_verif()";
+  my $network = $self->{network};
+  my $hash = $self->oapi_get("relation[network='${network}'][type=route_master];out meta;", "$self->{cfgDir}/relations_route_master.osm");
+  my $masters = $self->gtfs_routes_get();
+#  confess Dumper $masters;
+  my $refs = {};
+  for my $ref ( sort keys %{$masters} ) {
+#    warn "ref:$ref";
+    $refs->{$ref}->{gtfs} = $masters->{$ref}
+  }
+  my $k_ref = 'ref';
+  foreach my $relation (sort @{$hash->{relation}} ) {
+    if ( ! defined $refs->{$relation->{tags}->{ref}} ) {
+      warn "illenoo_masters_verif() ***";
+      next;
+    }
+    $refs->{$relation->{tags}->{ref}}->{osm} = $relation;
+    $self->illenoo_master_verif($refs->{$relation->{tags}->{ref}});
+  }
+}
+sub illenoo_master_verif {
+  my $self = shift;
+  warn "illenoo_master_verif()";
+  my $hash = shift;
+  my $tags;
+  $tags->{network} = $self->{network};
+  $tags->{"public_transport:version"} =  "2";
+  $tags->{type} = 'route_master';
+  $tags->{'route_master'} = 'bus';
+  $tags->{'service'} = 'busway';
+#  $tags->{description} = xml_escape($nomlong);
+#  $tags->{name} = $self->{reseau_ligne}. " " . xml_escape($nomlong);
+#  $tags->{ref} =  $ref;
+  $tags->{text_colour} = '#' . uc($hash->{gtfs}->{route_text_color});
+  $tags->{colour} = '#' . uc($hash->{gtfs}->{route_color});
+  my @keys = keys %{$tags};
+  my $osm = get(sprintf("https://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $hash->{osm}->{id}));
+#
+  $osm = $self->{oOSM}->modify_tags($osm, $tags, @keys);
+#    warn $osm;
+  $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'modify');
+}
+sub illenoo_masters_txt_verif {
+  my $self = shift;
+  warn "illenoo_masters_txt_verif()";
+  my $network = $self->{network};
+  my $masters = $self->txt_masters_lire();
+  for my $id (keys %{$masters} ) {
+#    confess Dumper $refs->{$id};
+    my $r = $masters->{$id};
+    my $osm = get(sprintf("https://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $id));
+#    confess $osm;
+    delete $r->{'id'};
+    $r->{name} = xml_escape($r->{name});
+    $r->{description} = xml_escape($r->{description});
+    $r->{type} = 'route_master';
+    $r->{'route_master'} = 'bus';
+
+    my @keys = keys %{$r};
+    $osm = $self->{oOSM}->modify_tags($osm, $r, @keys);
+#    warn $osm;
+    $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'modify');
+  }
+#  confess Dumper $refs;
+}
+#
+# vérification des routes par rapport au gtfs
+# perl scripts/keolis.pl --DEBUG 0 --DEBUG_GET 1 illenoo illenoo_routes_verif
+sub illenoo_routes_verif {
+  my $self = shift;
+  warn "illenoo_routes_verif()";
+  my $network = $self->{network};
+  my $hash = $self->oapi_get("relation[network='${network}'][type=route];out meta;", "$self->{cfgDir}/relations_route.osm");
+  my $routes = $self->gtfs_routes_get();
+#  confess Dumper $routes;
+  my $refs = {};
+  for my $ref ( sort keys %{$routes} ) {
+#    warn "ref:$ref";
+    $refs->{$ref}->{gtfs} = $routes->{$ref}
+  }
+  my $k_ref = 'ref';
+  foreach my $relation (sort @{$hash->{relation}} ) {
+    if ( ! defined $refs->{$relation->{tags}->{ref}} ) {
+      warn "illenoo_routes_verif() ***";
+      next;
+    }
+    $refs->{$relation->{tags}->{ref}}->{osm} = $relation;
+    $self->illenoo_route_verif($refs->{$relation->{tags}->{ref}});
+  }
+}
+sub illenoo_route_verif {
+  my $self = shift;
+  warn "illenoo_route_verif()";
+  my $hash = shift;
+  my $tags;
+  $tags->{network} = $self->{network};
+  $tags->{"public_transport:version"} =  "2";
+  $tags->{type} = 'route';
+  $tags->{'route'} = 'bus';
+  $tags->{'service'} = 'busway';
+#  $tags->{description} = xml_escape($nomlong);
+#  $tags->{name} = $self->{reseau_ligne}. " " . xml_escape($nomlong);
+#  $tags->{ref} =  $ref;
+  $tags->{text_colour} = '#' . uc($hash->{gtfs}->{route_text_color});
+  $tags->{colour} = '#' . uc($hash->{gtfs}->{route_color});
+  my @keys = keys %{$tags};
+  my $osm = get(sprintf("https://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $hash->{osm}->{id}));
+#
+  $osm = $self->{oOSM}->modify_tags($osm, $tags, @keys);
+#    warn $osm;
+  $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'modify');
+}
+#
+# création du fichier texte
+sub illenoo_routes_txt_ecrire {
+  my $self = shift;
+  warn "illenoo_routes_txt_ecrire()";
+  my ($f_txt, $ligne, $masters);
+  $f_txt = "$self->{cfgDir}/masters.txt";
+  my $csv = 'id;ref;name;description;from;to';
+
+  open(TXT, "< :utf8", $f_txt) or die;
+  $ligne = <TXT>;
+  while( my $ligne = <TXT>) {
+    chomp($ligne);
+    my ($id, $ref, $description, $colour, $text_colour) = split(";", $ligne);
+#    $name =~ s{(\S)<}{$1 <}g;
+#    warn "$ref => $name";
+    $masters->{$ref} = {
+      id => $id,
+      ref => $ref,
+      description => $description,
+      colour => uc($colour),
+      text_colour => uc($text_colour),
+      name => sprintf("%s %s", $self->{reseau_ligne}, $ref)
+    };
+  }
+  close(TXT);
+  $f_txt = "$self->{cfgDir}/route_osm2txt.csv";
+  open(TXT, "< :utf8", $f_txt) or die;
+  $ligne = <TXT>;
+  while( my $ligne = <TXT>) {
+    chomp($ligne);
+    warn $ligne;
+    my ($id, $ref, $name, $description, $from, $to) = split(";", $ligne);
+    $ref = lc($ref);
+    if ( ! defined $masters->{$ref} ) {
+      warn "***";
+      next;
+    }
+#    warn Dumper $masters->{$ref};
+    my $master =  $masters->{$ref};
+    my @via = split(/ <> /, $master->{description});
+    $from = $via[0];
+    $to = $via[-1];
+    $csv .= sprintf("\n%s;%s;%s;%s;%s;%s", $id, $ref, $master->{name}, $master->{description}, $from, $to);
+  }
+  close(TXT);
+  my $dsn = "$self->{cfgDir}/routes.csv";
+  open(CSV, "> :utf8", $dsn) or die;
+  print CSV $csv;
+  close(CSV);
+  warn "dsn: $dsn";
+}
+#
+# la mise en place des tags à partir du fichier routes.txt
+sub illenoo_routes_txt_verif {
+  my $self = shift;
+  warn "illenoo_routes_txt_verif()";
+  my $refs = $self->txt_routes_lire();
+  for my $id (keys %{$refs} ) {
+#    confess Dumper $refs->{$id};
+    my $r = $refs->{$id};
+    my $osm = get(sprintf("https://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $id));
+#    confess $osm;
+    delete $r->{'id'};
+    $r->{name} = xml_escape($r->{name});
+    $r->{description} = xml_escape($r->{description});
+    $r->{'public_transport:version'} = '2';
+
+    my @keys = keys %{$r};
+    $osm = $self->{oOSM}->modify_tags($osm, $r, @keys);
+#    warn $osm;
+    $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'modify');
+  }
+}
+#
+# la création des retours à partir du fichier routes.txt
+sub illenoo_routes_txt_retour {
+  my $self = shift;
+  warn "illenoo_routes_txt_verif()";
+  my $refs = $self->txt_routes_lire();
+  for my $id (sort keys %{$refs} ) {
+    if ($id !~ m{^\d+$} ) {
+      next;
+    }
+
+#    confess Dumper $refs->{$id};
+    my $r = $refs->{$id};
+    warn $r->{ref};
+    my $osm = get(sprintf("https://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $id));
+#    warn $osm;
+    my @lignes = split("\n", $osm);
+    my @ways = grep(/<member.*role=""/, @lignes);
+    my @stops = grep(/<member.*role="\S+"/, @lignes);
+    my $ways = join("\n", reverse(@ways));
+    my $stops = join("\n", reverse(@stops));
+    $osm = <<EOF;
+<relation id="-1" timestamp="0" changeset="1" version="1">
+$stops
+$ways
+</relation>
+EOF
+    $r->{name} = xml_escape($r->{name});
+    $r->{description} = xml_escape($r->{description});
+    $r->{'public_transport:version'} = '2';
+    $r->{id} = $r->{from};
+    $r->{from} = $r->{to};
+    $r->{to} = $r->{id};
+    delete $r->{'id'};
+
+    my @keys = keys %{$r};
+    $osm = $self->{oOSM}->modify_tags($osm, $r, @keys);
+    $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'create');
+#    exit;
+  }
+}
+sub illenoo_routes_bug {
+  my $self = shift;
+  warn "illenoo_routes_bug()";
+  my $network = $self->{network};
+  my $hash = $self->oapi_get("relation['public_transport:version'='2'][name~'Bus Illenoo'];out meta;", "$self->{cfgDir}/relations_route_bug.osm");
+#  exit;
+  foreach my $relation (sort @{$hash->{relation}}) {
+    my $osm = get(sprintf("https://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
+    my $r = {
+      'route' => 'bus',
+      'type' => 'route',
+      'network' => 'fr_illenoo',
+    };
+
+    my @keys = keys %{$r};
+    $osm = $self->{oOSM}->modify_tags($osm, $r, @keys);
+#    warn $osm;
+    $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'modify');
+
+  }
+}
 #
 #
 # récupération d'une table

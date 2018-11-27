@@ -12,6 +12,185 @@ use Data::Dumper;
 use LWP::Simple;
 #
 our ($hash, $gtfs_routes);
+sub routemaster_osm2txt {
+  my $self = shift;
+  my $network = $self->{network};
+  my $hash = $self->oapi_get("relation[network='${network}'][type=route_master];out meta;", "$self->{cfgDir}/relations_route_master.osm");
+  my $k_ref = 'ref';
+  my $csv = 'id;ref;description;colour;text_colour';
+
+  foreach my $relation ( sort tri_tags_ref @{$hash->{relation}} ) {
+    $csv .= sprintf("\n%s;%s;%s;%s;%s", $relation->{id}, $relation->{tags}->{$k_ref}, $relation->{tags}->{description}, $relation->{tags}->{colour}, $relation->{tags}->{text_coulour});
+  }
+#  confess Dumper $csv;
+  my $dsn = "$self->{cfgDir}/routemaster_osm2txt.csv";
+  open(CSV, "> :utf8", $dsn) or die;
+  print CSV $csv;
+  close(CSV);
+  warn "dsn: $dsn";
+}
+#
+# pour les différentes lignes
+sub routemaster_member_valid {
+  my $self = shift;
+  warn "routemaster_member_valid()";
+  my $network = $self->{network};
+  my $hash_route_master = $self->oapi_get("relation[network='${network}'][type=route_master][route_master=bus];out meta;", "$self->{cfgDir}/valid_route_master.osm");
+  my $hash_route = $self->oapi_get("relation[network='${network}'][type=route][route=bus];out meta;", "$self->{cfgDir}/valid_route.osm");
+  my $refs;
+  my @deleted_keys = qw(source);
+  my $deleted_keys = join('|', @deleted_keys);
+  my $members;
+#
+# on indexe les route par ref
+  foreach my $relation (sort @{$hash_route->{relation}}) {
+    if ( ! $relation->{tags}->{ref} ) {
+      confess;
+    }
+    warn "routemaster_member_valid() route r" . $relation->{id} . " ref: " . $relation->{tags}->{ref};
+    my $ref = $relation->{tags}->{ref};
+    $ref =~ s{\-.$}{};
+    $members->{$ref}->{$relation->{id}} = 1;;
+  }
+#  confess Dumper $members;
+#
+# on indexe les route_master par ref
+  foreach my $relation (sort @{$hash_route_master->{relation}}) {
+    if ( ! $relation->{tags}->{ref} ) {
+      warn "***manque tag ref";
+      confess Dumper $relation;
+    }
+    warn "routemaster_member_valid()() master r" . $relation->{id} . " ref: " . $relation->{tags}->{ref};
+    my $ref = $relation->{tags}->{ref};
+    if ( ! defined $members->{$ref} ) {
+      warn "***pas de route";
+      next;
+    }
+    my $osm_member = '';
+    my $ko = 0;
+    my @routes = keys %{$members->{$ref}};
+#    warn Dumper \@{$relation->{member}};
+    for my $member ( @{$relation->{member}} ) {
+      my $r = $member->{ref};
+      if ( not defined $members->{$ref}->{$r} ) {
+       warn "***member en plus";
+      }
+      delete $members->{$ref}->{$r};
+    }
+    my @refs = keys %{$members->{$ref}};
+    if ( scalar(@refs) > 0 ) {
+      warn "**** manque";
+      warn Dumper $members->{$ref};
+      $ko = 2;
+    }
+    if ( $ko == 0 ) {
+      next;
+    }
+    warn "toto";
+    for my $r ( @routes ) {
+#    confess Dumper $relation;
+      $osm_member .= '  <member type="relation" ref="' . $r . '" role=""/>' . "\n";
+    }
+    my $osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $relation->{id}));
+    warn $osm;
+    $osm = $self->{oOSM}->delete_tags($osm, $deleted_keys);
+    $osm =  $self->{oOSM}->relation_replace_member($osm, '<member type="relation" ref="\d+" role=""/>', $osm_member);
+    $self->{oAPI}->changeset($osm, $self->{osm_commentaire}, 'modify');
+  }
+  warn "routemaster_member_valid() fin";
+}
+#
+# générer le code wiki
+sub routemaster_wiki {
+  my $self = shift;
+  warn "routemaster_wiki() debut";
+  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route_master][route_master=bus];out meta;", "$self->{cfgDir}/relations_route_master.osm");
+  my $wiki = <<'EOF';
+==Les route_master==
+{|class="wikitable sortable"
+|-
+!scope="col"| Ligne
+!scope="col" class="unsortable"| Nom
+!scope="col" class="unsortable"| Description
+!scope="col" class="unsortable"| Statut
+!scope="col" class="unsortable"| Notes
+EOF
+  foreach my $relation (sort tri_tags_ref @{$hash->{relation}}) {
+    my $id = $relation->{id};
+    my $ref = $relation->{tags}->{ref};
+#    my $ref_network = $relation->{tags}->{'ref:ksma'};
+#    if ( $ref_network !~ m{\-[ABCD]$} ) {
+#      next;
+#    }
+    my $network = $relation->{tags}->{network};
+    my $description = $relation->{tags}->{description};
+    my $name = $relation->{tags}->{name};
+    my $fg = $relation->{tags}->{text_colour};
+    my $bg = $relation->{tags}->{colour};
+    $wiki .= <<EOF;
+|-
+!scope="row"| {{Sketch Line|$ref|$network|bg=$bg|fg=$fg}}
+| $name
+| {{Relation|$id| $name : $description}}
+| ||
+EOF
+  }
+  $wiki .= <<EOF;
+|}
+EOF
+  my $dsn = "$self->{cfgDir}/routemaster_wiki.txt";
+  open(TXT, '>:utf8', $dsn);
+  print TXT $wiki;
+  warn "wiki_routes() fin $dsn";
+}
+#
+# générer le code wiki
+# perl scripts/keolis.pl --DEBUG_GET 0 bretagne routemaster_area_wiki
+sub routemaster_area_wiki {
+  my $self = shift;
+  warn "routemaster_wiki() debut";
+  my $hash = $self->oapi_get("area[name='Bretagne']->.a;relation(area.a)[type=route][route=bus]->.itineraries;.itineraries << -> .lines;(relation.lines['route_master'='bus'];);out meta;", "$self->{cfgDir}/routemaster_area_wiki.osm");
+  my $osm_base = $hash->{meta}[0]->{osm_base};
+
+  my $wiki = <<EOF;
+==Les route_master $osm_base==
+{|class="wikitable sortable"
+|-
+!scope="col" class="unsortable"| Network
+!scope="col" class="unsortable"| Ligne
+!scope="col" class="unsortable"| Nom
+!scope="col" class="unsortable"| Description
+
+EOF
+  foreach my $relation (sort tri_tags_network @{$hash->{relation}}) {
+    my $id = $relation->{id};
+    my $ref = $relation->{tags}->{ref};
+#    my $ref_network = $relation->{tags}->{'ref:ksma'};
+#    if ( $ref_network !~ m{\-[ABCD]$} ) {
+#      next;
+#    }
+    my $network = $relation->{tags}->{network};
+    my $description = $relation->{tags}->{description};
+    my $name = $relation->{tags}->{name};
+    my $fg = $relation->{tags}->{text_colour};
+    my $bg = $relation->{tags}->{colour};
+    $wiki .= <<EOF;
+|-
+!scope="row"| $network
+| {{Sketch Line|$ref|$network|bg=$bg|fg=$fg}}
+| $name
+| {{Relation|$id| $name : $description}}
+| $relation->{timestamp}
+EOF
+  }
+  $wiki .= <<EOF;
+|}
+EOF
+  my $dsn = "$self->{cfgDir}/routemaster_area_wiki.txt";
+  open(TXT, '>:utf8', $dsn);
+  print TXT $wiki;
+  warn "wiki_routes() fin $dsn";
+}
 #
 # vérification des relations type=route_master
 # - par rapport à OSM

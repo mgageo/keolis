@@ -12,6 +12,158 @@ use Carp;
 use Data::Dumper;
 use LWP::Simple;
 our ($ref, $hash);
+
+sub route_area_wiki {
+  my $self = shift;
+  my $hash = $self->oapi_get("area[name='Bretagne']->.a;relation(area.a)[type=route][route=bus];out meta;", "$self->{cfgDir}/route_bretagne_wiki.osm");
+#  confess Dumper $hash->{meta}[0];
+  my $osm_base = $hash->{meta}[0]->{osm_base};
+  my $wiki = <<"EOF";
+==Les routes ${osm_base}==
+{|class="wikitable sortable"
+|-
+!scope="col"| Network
+!scope="col"| Ligne
+!scope="col" class="unsortable"| Nom
+!scope="col" class="unsortable"| Direction
+!scope="col" class="unsortable"| nodes/ways
+!scope="col" class="unsortable"| Notes
+EOF
+  foreach my $relation (sort tri_tags_network @{$hash->{relation}}) {
+    @{$relation->{nodes}} = ();
+    @{$relation->{ways}} = ();
+    my $nb_nodes = 0;
+    my $nb_ways = 0;
+# vérification du type des "member"
+    for my $member ( @{$relation->{member}} ) {
+      if ( $member->{type} eq 'node' ) {
+        push @{$relation->{nodes}}, $member->{ref};
+        $nb_nodes++;
+        next;
+      };
+      if ( $member->{type} eq 'way' ) {
+        push @{$relation->{ways}}, $member->{ref};
+        $nb_ways++;
+        next;
+      };
+    }
+    if ( $self->{DEBUG} > 0 ) {
+      warn sprintf("wiki_routes() r%s ;ref:%s;%s;%s;%s;%s", $relation->{id}, $relation->{tags}->{ref}, $relation->{user}, $relation->{timestamp}, scalar(@{$relation->{nodes}}), scalar(@{$relation->{ways}}));
+    }
+    my $id = $relation->{id};
+    my $ref = $relation->{tags}->{ref};
+#    my $ref_network = $relation->{tags}->{'ref:ksma'};
+#    if ( $ref_network !~ m{\-[ABCD]$} ) {
+#      next;
+#    }
+    my $network = $relation->{tags}->{network};
+    my $to = $relation->{tags}->{to};
+    my $name = $relation->{tags}->{name};
+    my $fg = $relation->{tags}->{text_colour};
+    my $bg = $relation->{tags}->{colour};
+    $wiki .= <<EOF;
+|-
+!scope="row"| $network
+| {{Sketch Line|$ref|$network|bg=$bg|fg=$fg}}
+| $name
+| {{Relation|$id| $name : Direction $to}}
+| $nb_nodes / $nb_ways
+| $relation->{timestamp}
+||
+EOF
+  }
+  $wiki .= <<EOF;
+|}
+EOF
+  my $dsn = "$self->{cfgDir}/route_bretagne_wiki.txt";
+  open(TXT, '>:utf8', $dsn);
+  print TXT $wiki;
+  warn "dsn: $dsn";
+}
+#
+# générer le code wiki d'un réseau, version ksma
+sub route_wiki {
+  my $self = shift;
+#  $self->ksma_masters();
+#  my $hash = $self->oapi_get("area[name='Saint-Malo'];(relation[network!~'fr_'][type=route][route=bus](area));out meta;", "$self->{cfgDir}/route_vide.osm");
+  my $get = "relation[network='$self->{network}'][type=route][route=bus];out meta;";
+  warn "route_wiki() debut $get";
+  my $hash = $self->oapi_get($get, "$self->{cfgDir}/route_wiki.osm");
+  my $osm_base = $hash->{meta}[0]->{osm_base};
+  my $wiki = <<EOF;
+==Les routes $osm_base==
+{|class="wikitable sortable"
+|-
+!scope="col"| Ligne
+!scope="col" class="unsortable"| Nom
+!scope="col" class="unsortable"| Direction
+!scope="col" class="unsortable"| Statut
+!scope="col" class="unsortable"| Notes
+EOF
+  foreach my $relation (sort tri_tags_ref @{$hash->{relation}}) {
+    @{$relation->{nodes}} = ();
+    @{$relation->{ways}} = ();
+    my $nb_nodes = 0;
+    my $nb_ways = 0;
+# vérification du type des "member"
+    for my $member ( @{$relation->{member}} ) {
+      if ( $member->{type} eq 'node' ) {
+        push @{$relation->{nodes}}, $member->{ref};
+        $nb_nodes++;
+        next;
+      };
+      if ( $member->{type} eq 'way' ) {
+        push @{$relation->{ways}}, $member->{ref};
+        next;
+      };
+    }
+    if ( $self->{DEBUG} > 0 ) {
+      warn sprintf("route_wiki() r%s ;ref:%s;%s;%s;%s;%s", $relation->{id}, $relation->{tags}->{ref}, $relation->{user}, $relation->{timestamp}, scalar(@{$relation->{nodes}}), scalar(@{$relation->{ways}}));
+    }
+    my $id = $relation->{id};
+    my $ref = $relation->{tags}->{ref};
+#    my $ref_network = $relation->{tags}->{'ref:ksma'};
+#    if ( $ref_network !~ m{\-[ABCD]$} ) {
+#      next;
+#    }
+    my $network = $relation->{tags}->{network};
+    my $to = $relation->{tags}->{to};
+    my $name = $relation->{tags}->{name};
+    my $fg = $relation->{tags}->{text_colour};
+    my $bg = $relation->{tags}->{colour};
+    $wiki .= <<EOF;
+|-
+!scope="row"| {{Sketch Line|$ref|$network|bg=$bg|fg=$fg}}
+| $name
+| {{Relation|$id| $name : Direction $to}}
+| ||
+EOF
+  }
+  $wiki .= <<EOF;
+|}
+EOF
+  my $dsn = "$self->{cfgDir}/route_wiki.txt";
+  open(TXT, '>:utf8', $dsn);
+  print TXT $wiki;
+  warn "route_wiki() fin $dsn";
+}
+sub route_osm2txt {
+  my $self = shift;
+  my $network = $self->{network};
+  my $hash = $self->oapi_get("relation[network='${network}'][type=route];out meta;", "$self->{cfgDir}/relations_route.osm");
+  my $k_ref = 'ref';
+  my $csv = 'id;ref;name;description;from;to';
+
+  foreach my $relation ( sort tri_tags_ref @{$hash->{relation}} ) {
+    $csv .= sprintf("\n%s;%s;%s;%s;%s;%s", $relation->{id}, $relation->{tags}->{$k_ref}, $relation->{tags}->{name}, $relation->{tags}->{description}, $relation->{tags}->{ftom}, $relation->{tags}->{to});
+  }
+#  confess Dumper $csv;
+  my $dsn = "$self->{cfgDir}/route_osm2txt.csv";
+  open(CSV, "> :utf8", $dsn) or die;
+  print CSV $csv;
+  close(CSV);
+  warn "dsn: $dsn";
+}
 #
 # pour trouver les relations "route" avec un contenu non significatif, moins de 5 ways
 sub supprime_route_vide {
@@ -342,17 +494,19 @@ sub relation_routes_tags {
 # analyse des members d'une relation route
 sub relation_routes_members {
   my $self = shift;
+  $self->{'josm'} = "josm\n";
   my $hash = $self->oapi_get("relation[network='". $self->{network} . "'][type=route]['route'='bus'];out meta;", "$self->{cfgDir}/routes_platform.osm");
   foreach my $relation (sort tri_tags_ref @{$hash->{relation}}) {
     my $k_ref = $relation->{tags}->{$self->{k_ref}};
     if ($k_ref !~ m{^0[1]} ) {
       next;
     }
-    warn sprintf("relations_route_members() r%s ref:%s %s %s", $relation->{id}, $k_ref, $relation->{user}, $relation->{timestamp});
+    warn sprintf("relations_route_members() r%s ref: %s.gpx %s %s", $relation->{id}, $k_ref, $relation->{user}, $relation->{timestamp});
 #    next;
     $self->{id} = $relation->{id};
     $self->relation_route_members();
   }
+  warn $self->{josm}
 }
 sub relation_route_members {
   my $self = shift;
@@ -404,6 +558,7 @@ sub relation_route_members {
       warn "***platform";
       warn Dumper $member;
       warn Dumper $node;
+      $self->{josm} .= sprintf("r%s %s.gpx\n", $relation->{id},  $relation->{tags}->{$self->{k_ref}});
       next;
     }
     my $distance = 10000;
@@ -414,10 +569,11 @@ sub relation_route_members {
         $distance = $d;
       }
     }
-    if ($distance > 150 ) {
+    if ($distance > 50 ) {
       warn "***platform $distance";
       warn Dumper $member;
       warn Dumper $node;
+      $self->{josm} .= sprintf("%s distance:$distance r%s %s.gpx\n", $node->{tags}->{name}, $relation->{id}, $relation->{tags}->{$self->{k_ref}});
       next;
     }
   }
@@ -455,72 +611,7 @@ sub hexdump {
   }
   return $hex;
 }
-#
-# générer le code wiki d'un réseau, version ksma
-sub wiki_routes {
-  my $self = shift;
-  warn "wiki_routes() debut";
-#  $self->ksma_masters();
-#  my $hash = $self->oapi_get("area[name='Saint-Malo'];(relation[network!~'fr_'][type=route][route=bus](area));out meta;", "$self->{cfgDir}/route_vide.osm");
-  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route][route=bus];out meta;", "$self->{cfgDir}/network_wiki.osm");
-#  my $hash = $self->oapi_get("relation[network='$self->{network}'][type=route_master][route_master=bus];out meta;", "$self->{cfgDir}/network_wiki.osm");
-  my $wiki = <<'EOF';
-==Les routes==
-{|class="wikitable sortable"
-|-
-!scope="col"| Ligne
-!scope="col" class="unsortable"| Nom
-!scope="col" class="unsortable"| Direction
-!scope="col" class="unsortable"| Statut
-!scope="col" class="unsortable"| Notes
-EOF
-  foreach my $relation (sort tri_tags_ref @{$hash->{relation}}) {
-    @{$relation->{nodes}} = ();
-    @{$relation->{ways}} = ();
-    my $nb_nodes = 0;
-    my $nb_ways = 0;
-# vérification du type des "member"
-    for my $member ( @{$relation->{member}} ) {
-      if ( $member->{type} eq 'node' ) {
-        push @{$relation->{nodes}}, $member->{ref};
-        $nb_nodes++;
-        next;
-      };
-      if ( $member->{type} eq 'way' ) {
-        push @{$relation->{ways}}, $member->{ref};
-        next;
-      };
-    }
-    if ( $self->{DEBUG} > 0 ) {
-      warn sprintf("wiki_routes() r%s ;ref:%s;%s;%s;%s;%s", $relation->{id}, $relation->{tags}->{ref}, $relation->{user}, $relation->{timestamp}, scalar(@{$relation->{nodes}}), scalar(@{$relation->{ways}}));
-    }
-    my $id = $relation->{id};
-    my $ref = $relation->{tags}->{ref};
-#    my $ref_network = $relation->{tags}->{'ref:ksma'};
-#    if ( $ref_network !~ m{\-[ABCD]$} ) {
-#      next;
-#    }
-    my $network = $relation->{tags}->{network};
-    my $to = $relation->{tags}->{to};
-    my $name = $relation->{tags}->{name};
-    my $fg = $relation->{tags}->{text_colour};
-    my $bg = $relation->{tags}->{colour};
-    $wiki .= <<EOF;
-|-
-!scope="row"| {{Sketch Line|$ref|$network|bg=$bg|fg=$fg}}
-| $name
-| {{Relation|$id| $name : Direction $to}}
-| ||
-EOF
-  }
-  $wiki .= <<EOF;
-|}
-EOF
-  my $dsn = "$self->{cfgDir}/routes_wiki.txt";
-  open(TXT, '>:utf8', $dsn);
-  print TXT $wiki;
-  warn "wiki_routes() fin $dsn";
-}
+
 sub route_stops_get {
   my $self = shift;
   my $relation = shift;

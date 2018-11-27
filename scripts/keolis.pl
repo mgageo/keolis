@@ -33,21 +33,28 @@ use lib "scripts";
 
 
 use Transport;
+use TransportReseau;
+# les sources de données
+use TransportGtfs;
+use TransportTxt;
 use TransportBicycle;
 use TransportBusStop;
-use TransportGtfs;
 use TransportItiRoute;
 use TransportNetwork;
 use TransportOsrm;
+use TransportWiki;
 # use TransportParcours;
 use TransportRoute;
 use TransportRouteMaster;
 use TransportStopArea;
+#
+use TransportBreizhgo;
+use TransportChateaubourg;
+use TransportIllenoo;
+use TransportQuimper;
 use TransportRmat;
 use TransportStar;
 use TransportVitre;
-use TransportChateaubourg;
-use TransportIllenoo;
 use TransportMobibreizh;
 our $cfgDir = 'KEOLIS';
 our $baseDir = getcwd;
@@ -187,8 +194,12 @@ perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 rmat stop_position_verif
 # pour le Réseau STAR
 # les arrets : creation si besoin
 perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 star star_nodes_stops_diff
+# les routes
+perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 star star_parcours_diff
 # les arrets sur les routes
 perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 star star_relations_stops_diff
+# le parcours des routes
+perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 1 star star_relations_parcours_diff
 #
 # version avec les shapes
 perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 0 star star_routes_shapes_diff
@@ -196,7 +207,19 @@ perl scripts/keolis.pl --DEBUG 1 --DEBUG_GET 0 --shape 0158-B-2319-1615 star sta
 EOF
 
 }
-
+sub reseau {
+  my $self = {
+    DEBUG => $DEBUG,
+    DEBUG_GET => $DEBUG_GET,
+    gtfs => {
+      dir => "TRANSPORT/MOBIBREIZH",
+      agency_id => "QUB",
+      route_id => 'P10',
+    },
+  };
+  my $oTransport = new Transport($self);
+  $oTransport->$sp(@_);
+}
 sub Keolis {
   my $oItiRoute = new ItiRoute(&_keolis);
   my $sp = 'osm2route';
@@ -207,8 +230,8 @@ sub Keolis {
   }
   $oItiRoute->$sp(@_);
 }
-sub star {
-  my $oTransport = new Transport(&_star);
+sub auray {
+  my $oTransport = new Transport(&_auray);
   $sp = 'diff_route';
 #  $sp = 'diff_routes';
   if ( @_ ) {
@@ -218,21 +241,147 @@ sub star {
   }
   $oTransport->$sp(@_);
 }
-sub _star {
+sub _auray {
+  my $self = {
+    DEBUG => $DEBUG,
+    DEBUG_GET => $DEBUG_GET,
+    area => 'Auray',
+    ref => $ref,
+    id => $id,
+    shape => $shape,
+    network => 'Auray-Bus',
+    operator => "Keolis Morbihan",
+    cfgDir => "TRANSPORT/AURAY",
+    source => "GEOBREIZH",
+    osm_commentaire => 'maj septembre 2018',
+    k_route => "route",
+    k_ref => 'ref:FR:TIM',
+    tag_ref => '',
+  };
+  return $self;
+}
+sub breizhgo {
+  my $oTransport = new Transport(&_breizhgo);
+  my $sp = 'valid_network';
+  if ( @_ ) {
+    $sp = shift @_;
+  } else {
+    $sp = $ssp;
+  }
+  $oTransport->$sp(@_);
+}
+sub _breizhgo {
+  my $self = {
+    DEBUG => $DEBUG,
+    DEBUG_GET => $DEBUG_GET,
+    osm_commentaire => 'maj septembre 2018',
+    area => 'Bretagne',
+    ref => $ref,
+    id => $id,
+    name => "BREIZHGO",
+    network => "fr:BreizhGo",
+    operator => "Keolis Armor",
+    cfgDir => "TRANSPORT/BREIZHGO",
+    reseau_ligne => "Car BreizhGo ligne",
+    k_route => "route",
+    tag_ref => '[ref]',
+    k_ref => 'ref:fr:BreizhGo',
+    website => 'http://transports.bretagne.bzh/',
+    gtfs => {
+      dir => "TRANSPORT/MOBIBREIZH",
+      agency_id => "LRegion",
+      route_id => 'LRRNav4',
+    },
+    osm_commentaire => 'maj septembre 2018',
+  };
+  return $self;
+}
+sub bretagne {
+  my $oTransport = new Transport(&_bretagne);
+  my $sp = 'valid_network';
+  if ( @_ ) {
+    $sp = shift @_;
+  } else {
+    $sp = $ssp;
+  }
+  $oTransport->$sp(@_);
+}
+sub _bretagne {
+  my $self = {
+    DEBUG => $DEBUG,
+    DEBUG_GET => $DEBUG_GET,
+    osm_commentaire => 'maj septembre 2018',
+    area => 'Bretagne',
+    ref => $ref,
+    id => $id,
+    name => "bretagne",
+    network => "fr:bretagne",
+    operator => "Keolis Armor",
+    cfgDir => "TRANSPORT/bretagne",
+    reseau_ligne => "Car bretagne ligne",
+    k_route => "route",
+    tag_ref => '[ref]',
+    k_ref => 'ref:fr:bretagne',
+    website => 'http://transports.bretagne.bzh/',
+    gtfs => {
+      dir => "TRANSPORT/MOBIBREIZH",
+      agency_id => "LRegion",
+      route_id => 'LRRNav4',
+    },
+    osm_commentaire => 'maj septembre 2018',
+  };
+  return $self;
+}
+sub chateaubourg {
+  my $oTransport = new Transport(&_chateaubourg);
+  my $sp = 'valid_network';
+  if ( @_ ) {
+    $sp = shift @_;
+  } else {
+    $sp = $ssp;
+  }
+  $oTransport->$sp(@_);
+}
+sub _chateaubourg {
   my $self = {
     DEBUG => $DEBUG,
     DEBUG_GET => $DEBUG_GET,
     ref => $ref,
-    id => $id,
-    shape => $shape,
-    network => 'FR:STAR',
-    operator => "STAR",
-    cfgDir => "TRANSPORT/STAR",
-    source => "STAR Data Explore/Rennes Metropole",
-    osm_commentaire => 'maj aout 2018',
+    network => "fr:chateaubourg",
+    operator => "Keolis Armor",
+    tag_ref => '["ref"]',
+    cfgDir => "TRANSPORT/CHATEAUBOURG",
+    name => "Vitré Communauté - Châteaubourg",
+    source => "Vitré Communauté - Année 2016",
+    website => "http://www.vitrecommunaute.org/transport_commun.html",
     k_route => "route",
-    k_ref => 'ref:FR:STAR',
-    tag_ref => '["ref:FR:STAR"]',
+    osm_commentaire => 'maj juin 2016',
+  };
+  return $self;
+}
+sub dinard {
+  my $oTransport = new Transport(&_dinard);
+  my $sp = 'valid_network';
+  if ( @_ ) {
+    $sp = shift @_;
+  } else {
+    $sp = $ssp;
+  }
+  $oTransport->$sp(@_);
+}
+sub _dinard {
+  my $self = {
+    DEBUG => $DEBUG,
+    DEBUG_GET => $DEBUG_GET,
+    ref => $ref,
+    network => "fr_dinardbus",
+    operator => "Ville de Dinard",
+    tag_ref => '["ref"]',
+    cfgDir => "TRANSPORT/DINARD",
+    name => "Ville de Dinard",
+    source => "Ville de Dinard",
+    website => "https://www.ville-dinard.fr/le-transport-urbain/",
+    k_route => "route",
   };
   return $self;
 }
@@ -252,14 +401,19 @@ sub _illenoo {
     DEBUG_GET => $DEBUG_GET,
     ref => $ref,
     id => $id,
-    network => "fr_illenoo",
+    network => "fr:illenoo",
     operator => "Illenoo",
     cfgDir => "TRANSPORT/ILLENOO",
     source => "Département d'Ille-et-Vilaine - 3 Novembre 2016",
+    reseau_ligne => "Bus Illenoo ligne",
     k_route => "route",
     tag_ref => '[ref]',
     k_ref => 'ref:fr_illenoo',
-    osm_commentaire => 'maj novembre 2016',
+    gtfs => {
+      dir => "TRANSPORT/MOBIBREIZH",
+      agency_id => "ILLENOO",
+    },
+    osm_commentaire => 'maj septembre 2018',
   };
   return $self;
 }
@@ -291,9 +445,10 @@ sub _ksma {
   };
   return $self;
 }
-sub surf {
-  my $oTransport = new Transport(&_surf);
-  my $sp = 'valid_network';
+sub lorient {
+  my $oTransport = new Transport(&_lorient);
+  $sp = 'diff_route';
+#  $sp = 'diff_routes';
   if ( @_ ) {
     $sp = shift @_;
   } else {
@@ -301,21 +456,53 @@ sub surf {
   }
   $oTransport->$sp(@_);
 }
-sub _surf {
+sub _lorient {
   my $self = {
     DEBUG => $DEBUG,
     DEBUG_GET => $DEBUG_GET,
+    area => 'Lorient',
     ref => $ref,
-    network => "fr_surf",
-    operator => "Transdev Fougères",
-    tag_ref => '["ref:fr_surf"]',
-    cfgDir => "TRANSPORT/SURF",
-    name => 'Fougères',
-    website => 'http://www.lesurf.fr/',
-    source => "Service Urbain de la Région Fougeraise - Année 2016",
-    overpassQL => 'relation[network=fr_surf]["route"][ref="%s"];out meta;',
+    id => $id,
+    shape => $shape,
+    network => 'fr_ctrl',
+    operator => "STAR",
+    cfgDir => "TRANSPORT/STAR",
+    source => "GEOBREIZH",
+    osm_commentaire => 'maj septembre 2018',
     k_route => "route",
-    osm_commentaire => 'maj avril 2016',
+    k_ref => 'ref:fr_ctrl',
+    tag_ref => '',
+  };
+  return $self;
+}
+
+sub morbihan {
+  my $oTransport = new Transport(&_morbihan);
+  $sp = 'diff_route';
+#  $sp = 'diff_routes';
+  if ( @_ ) {
+    $sp = shift @_;
+  } else {
+    $sp = $ssp;
+  }
+  $oTransport->$sp(@_);
+}
+sub _morbihan {
+  my $self = {
+    DEBUG => $DEBUG,
+    DEBUG_GET => $DEBUG_GET,
+    area => 'Morbihan',
+    ref => $ref,
+    id => $id,
+    shape => $shape,
+    network => 'fr_tim',
+    operator => "TIM (Transports Interurbains du Morbihan)",
+    cfgDir => "TRANSPORT/TIM",
+    source => "GEOBREIZH",
+    osm_commentaire => 'maj septembre 2018',
+    k_route => "route",
+    k_ref => 'ref:FR:TIM',
+    tag_ref => '',
   };
   return $self;
 }
@@ -337,11 +524,11 @@ sub _rmat {
     tag_ref => '["ref"]',
     id => $id,
     ligne => "Réseau MAT",
-    network => "FR:Réseau MAT",
+    network => "fr:Réseau MAT",
     operator => "Keolis Saint-Malo",
     cfgDir => "TRANSPORT/RMAT",
     source => "Réseau MAT - juillet 2018",
-    overpassQL => 'relation[network="FR:Réseau MAT"]["route"][ref="%s"];out meta;',
+    overpassQL => 'relation[network="fr:Réseau MAT"]["route"][ref="%s"];out meta;',
     k_route => "route",
     osm_commentaire => 'maj aout 2018',
     tags => {
@@ -353,6 +540,64 @@ sub _rmat {
   };
   return $self;
 }
+sub star {
+  my $oTransport = new Transport(&_star);
+  $sp = 'diff_route';
+#  $sp = 'diff_routes';
+  if ( @_ ) {
+    $sp = shift @_;
+  } else {
+    $sp = $ssp;
+  }
+  $oTransport->$sp(@_);
+}
+sub _star {
+  my $self = {
+    DEBUG => $DEBUG,
+    DEBUG_GET => $DEBUG_GET,
+    ref => $ref,
+    id => $id,
+    shape => $shape,
+    network => 'FR:STAR',
+    operator => "STAR",
+    cfgDir => "TRANSPORT/STAR",
+    source => "STAR Data Explore/Rennes Metropole",
+    osm_commentaire => 'maj novembre 2018',
+    k_route => "route",
+    k_ref => 'ref:FR:STAR',
+    tag_ref => '["ref:FR:STAR"]',
+  };
+  return $self;
+}
+sub surf {
+  my $oTransport = new Transport(&_surf);
+  my $sp = 'valid_network';
+  if ( @_ ) {
+    $sp = shift @_;
+  } else {
+    $sp = $ssp;
+  }
+  $oTransport->$sp(@_);
+}
+sub _surf {
+  my $self = {
+    DEBUG => $DEBUG,
+    DEBUG_GET => $DEBUG_GET,
+    ref => $ref,
+    network => "FR:SURF",
+    operator => "Transdev Fougères",
+    tag_ref => '["ref:FR:SURF"]',
+    cfgDir => "TRANSPORT/SURF",
+    name => 'Fougères',
+    website => 'http://www.lesurf.fr/',
+    source => "Service Urbain de la Région Fougeraise - Année 2016",
+    overpassQL => 'relation[network=fr_surf]["route"][ref="%s"];out meta;',
+    k_route => "route",
+    osm_commentaire => 'maj avril 2016',
+  };
+  return $self;
+}
+
 sub vitre {
   my $oTransport = new Transport(&_vitre);
   my $sp = 'valid_network';
@@ -368,8 +613,8 @@ sub _vitre {
     DEBUG => $DEBUG,
     DEBUG_GET => $DEBUG_GET,
     ref => $ref,
-    network => "fr_vitre",
-    operator => "Kéolis Armor",
+    network => "fr:vitre",
+    operator => "Keolis Armor",
     tag_ref => '["ref"]',
     cfgDir => "TRANSPORT/VITRE",
     name => "Vitré",
@@ -381,34 +626,7 @@ sub _vitre {
   };
   return $self;
 }
-sub chateaubourg {
-  my $oTransport = new Transport(&_chateaubourg);
-  my $sp = 'valid_network';
-  if ( @_ ) {
-    $sp = shift @_;
-  } else {
-    $sp = $ssp;
-  }
-  $oTransport->$sp(@_);
-}
-sub _chateaubourg {
-  my $self = {
-    DEBUG => $DEBUG,
-    DEBUG_GET => $DEBUG_GET,
-    ref => $ref,
-    network => "fr_chateaubourg",
-    operator => "Kéolis Armor",
-    tag_ref => '["ref"]',
-    cfgDir => "TRANSPORT/CHATEAUBOURG",
-    name => "Vitré Communauté - Châteaubourg",
-    source => "Vitré Communauté - Année 2016",
-    website => "http://www.vitrecommunaute.org/transport_commun.html",
-    overpassQL => 'relation[network=fr_chateaubourg]["route"][ref="%s"];out meta;',
-    k_route => "route",
-    osm_commentaire => 'maj juin 2016',
-  };
-  return $self;
-}
+
 
 sub stop_area {
 #  $oTransport->diff_stop_area(@_);

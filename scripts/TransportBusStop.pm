@@ -11,7 +11,49 @@ use strict;
 use Carp;
 use Data::Dumper;
 use LWP::Simple;
+use Storable qw(store retrieve);
 our ($gtfs_stops, $hash, @nodes_modif, @stops_ajout);
+sub busstop_area_get {
+  my $self = shift;
+  my $hash = $self->{oOAPI}->osm_get("area[name='Bretagne']->.a;(node(area.a)[highway=bus_stop];node(area.a)[public_transport];);out meta;", "$self->{cfgDir}/busstop.osm");
+}
+#  perl scripts/keolis.pl reseau quimper busstop_reseau_get
+sub busstop_reseau_get {
+  my $self = shift;
+  my $zone = $self->{zone};
+  my $hash = $self->{oOAPI}->osm_get("area[name='$zone']->.a;(node(area.a)[highway=bus_stop];node(area.a)[public_transport!=stop_position][bus];);out meta;", "$self->{cfgDir}/busstop.osm");
+  return $hash;
+}
+sub busstop_index_ref {
+  my $self = shift;
+  my $hash = $self->busstop_area_get();
+  my $stops;
+  warn "busstop_index_ref() nb: " . scalar( @{$hash->{node}} );
+  my $nb = 0;
+  foreach my $node ( @{$hash->{node}}) {
+    my $tags = $node->{tags};
+    while ( my ($k, $v) = each %{$tags} ) {
+      if ( $k !~ m{^ref} ) {
+        next;
+      }
+#    confess Dumper $node;
+      $stops->{$v}->{$k} = $node;
+      $stops->{$v} = $node;
+      $nb++;
+    }
+  }
+  warn "busstop_index_ref() $nb nb: " . scalar(keys(%$stops));
+#  confess Dumper $stops;
+  my $dsn = "$self->{cfgDir}/busstops.dmp";
+  store($stops, $dsn);
+}
+sub busstop_index_ref_lire {
+  my $self = shift;
+  my $dsn = "$self->{cfgDir}/busstops.dmp";
+  my $stops = retrieve($dsn);
+  warn "busstop_index_ref_lire() nb: " . scalar(keys(%$stops));
+  return $stops;
+}
 sub tags_bus_stop {
   my $self = shift;
   warn "tags_bus_stop() début";
@@ -317,6 +359,7 @@ sub bus_stop {
   warn "bus_stop() début";
   my ($stops, $names, $names_norm, $osm, $tags);
   $osm = '';
+#  confess Dumper $gtfs_stops;
   warn "bus_stop() indexation gtfs";
   foreach my $stop ( @{$gtfs_stops} ) {
 #    warn Dumper $stop;
@@ -332,7 +375,7 @@ sub bus_stop {
     push @{$names->{$stop->{stop_name}}->{gtfs}}, $stop;
     push @{$names_norm->{name_norm($stop->{stop_name})}->{gtfs}}, $stop;
   }
-  warn "bus_stop() indexation osm";
+  warn "bus_stop() indexation osm k_ref:" . $self->{k_ref};
   foreach my $node (sort @{$hash->{node}} ) {
     my $name = '';
     my $name_norm = '';
@@ -340,8 +383,8 @@ sub bus_stop {
     if ( not defined $node->{tags}->{name} ) {
       if ( $self->{DEBUG} > 1 ) {
         warn "bus_stop() indexation osm ref pas de name";
+        warn Dumper $node;
       }
- #     warn Dumper $node;
       next;
     }
     $name = $node->{tags}->{name};
@@ -402,6 +445,7 @@ sub bus_stop {
 # les ref en double du coté gtfs
   my $nb_double_gtfs = 0;
   my $osm_name = '';
+  my $nb_osm_name = 0;
   for my $ref (sort keys  %{$stops} ) {
     if ( not defined $stops->{$ref}->{gtfs} ) {
       next;
@@ -430,8 +474,9 @@ sub bus_stop {
     my $node_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'node', $stops->{$ref}->{osm}[0]->{id}));
     undef $tags;
     $tags->{name} = $stops->{$ref}->{gtfs}[0]->{stop_name};
-    $tags->{source} = $self->{source};
-    $osm_name .= $self->{oOSM}->modify_tags($node_osm, $tags, qw(name source)) . "\n";
+#    $tags->{source} = $self->{source};
+    $osm_name .= $self->{oOSM}->modify_tags($node_osm, $tags, keys %$tags) . "\n";
+    $nb_osm_name++;
   }
   if ( $osm_name ne '' ) {
     warn "bus_stop() modification des noms";
@@ -439,11 +484,14 @@ sub bus_stop {
   } else {
     warn "bus_stop() pas de modification des noms";
   }
+  warn "bus_stop() nb_stops: " . scalar(keys %{$stops});
   warn "bus_stop() nb_double_gtfs: $nb_double_gtfs";
+  warn "bus_stop() nb_osm_name: $nb_osm_name";
   warn "bus_stop() indexation nb ref: " . scalar(keys %{$stops});
 #  exit;
 #
 # les ref en double du coté osm
+  warn "\n\nbus_stop() ref en double osm";
   my $nb_double_osm = 0;
   my $osm_delete = "";
   for my $ref (sort keys  %{$stops} ) {
@@ -475,9 +523,9 @@ sub bus_stop {
 #    exit;
   }
   warn "bus_stop() nb_double_osm: $nb_double_osm";
-#  exit;
 #
 # les nodes d'osm en plus (absent du gtfs)
+  warn "\n\nbus_stop() nodes osm en plus";
   for my $name (sort keys  %{$names_norm} ) {
     if ( defined $names_norm->{$name}->{gtfs} ) {
       next;
@@ -487,7 +535,9 @@ sub bus_stop {
   }
 #
 # les nodes d'osm en moins (présent dans le gtfs)
+  warn "\n\nbus_stop() nodes osm en moins";
   my $osm_ref = '';
+  my $nb_moins = 0;
   for my $ref (sort keys  %{$stops} ) {
     if ( defined  $stops->{$ref}->{osm} ) {
       next;
@@ -498,8 +548,11 @@ sub bus_stop {
     }
     warn "bus_stop() osm en moins: name: $ref stop_name:" . $g->{stop_name} . " refs:" . $g->{routes};
 #    warn Dumper $stops->{$ref}->{gtfs}[0]; exit;
+    $nb_moins++;
     $osm_ref .= $self->{oOSM}->node_stop($stops->{$ref}->{gtfs}[0]);
   }
+  warn "bus_stop() nodes osm en moins: $nb_moins";
+
 #  exit;
 #  confess Dumper $osm_ref;
   if ( $osm_ref ne '' ) {

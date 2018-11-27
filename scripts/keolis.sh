@@ -18,6 +18,8 @@ CONF() {
   ENV
   CFG=KEOLIS
   [ -d "${CFG}" ] || mkdir -p "${CFG}"
+  VarDir='/d/web.var/geo/KEOLIS'
+  varDir='d:/web.var/geo/KEOLIS'
   _ENV_gdal
   cle=NG7IEAO1IE77F3O
   url=http://data.keolis-rennes.com/xml/
@@ -139,6 +141,7 @@ EOF
 }
 #f _STAR_api:
 _STAR_api() {
+#  wget -O "${VarDir}/${fic}.$format" "https://data.explore.star.fr/api/records/1.0/download/?dataset=$fic&format=$format&refine.datedebutvalidite=2018"
   wget -O "${VarDir}/${fic}.$format" "https://data.explore.star.fr/api/records/1.0/download/?dataset=$fic&format=$format"
   fic="$fic.$format"
   (
@@ -191,6 +194,8 @@ STAR_db() {
   DB star_parcours
   DB star_dessertes
   DB star_dessertes_stops
+  DB star_dessertes_stop
+  DB star_pointsarret_stop
   DB star_parcours_stops
   DB star_parcours_stops_lignes
   LOG "STAR_db fin"
@@ -253,16 +258,43 @@ GTFS_dl() {
   version=20170927
   version=$(date +%Y%m%d)
   format=GTFS-${version}.zip
-  [ -d /${Drive}/web.var/geo/RENNES/$version ] || mkdir -p /${Drive}/web.var/geo/RENNES/$version
-  wget -O "${Drive}:/web.var/geo/RENNES/${format}" http://ftp.keolis-rennes.com/opendata/tco-busmetro-horaires-gtfs-versions-td/attachments/GTFS_2017.1.3_2017-10-02_2017-10-15.zip
+  [ -d ${VarDir}/$version ] || mkdir -p ${VarDir}/$version
+  wget -O "${VarDir}/${format}" http://ftp.keolis-rennes.com/opendata/tco-busmetro-horaires-gtfs-versions-td/attachments/GTFS_2018.3.0.2_2018-11-26_2018-12-23.zip
   (
-    cd "${Drive}:/web.var/geo/RENNES"
+    cd "${VarDir}"
     7za -y x ${format}
     cd $version
     7za -y x ../${format}
   )
-  ls -alrt /d/web.var/geo/RENNES
-  LOG "GTFS_dl fin /d/web.var/geo/RENNES"
+  ls -alrt ${VarDir}
+  LOG "GTFS_dl fin ${VarDir}"
+}
+#F GTFS_db: les données de Kéolis en version spatialite
+GTFS_db() {
+  LOG "GTFS_db debut"
+  DB shapes
+  DB routes
+#  DB routes_additionals
+  DB trips
+  DB stops
+  DB AddGeometryColumn stops geom2154 2154
+  DB stop_times
+  DB keolis_stops
+  DB keolis_stops_lignes
+  DB keolis_iti
+  DB keolis_trip
+  LOG "GTFS_db fin"
+}
+#f GTFS_pg: les données de Kéolis en version postgis
+GTFS_pg() {
+  LOG "GTFS_pg debut"
+  PG
+  PG keolis_routes
+  PG keolis_trips
+  PG keolis_stop_times
+  PG keolis_stops
+  PG keolis_iti
+  LOG "GTFS_pg fin"
 }
 #
 # la version de la star data explorer des itinéraires des bus
@@ -297,17 +329,7 @@ KEOLIS_wm() {
   )
   LOG "KEOLIS_wm fin"
 }
-#f GTFS_pg: les données de Kéolis en version postgis
-GTFS_pg() {
-  LOG "GTFS_pg debut"
-  PG
-  PG keolis_routes
-  PG keolis_trips
-  PG keolis_stop_times
-  PG keolis_stops
-  PG keolis_iti
-  LOG "GTFS_pg fin"
-}
+
 #f OSM_oapi: récupération des donnéees OSM avec l'overpass
 OSM_oapi() {
   LOG "OSM_oapi debut"
@@ -339,21 +361,7 @@ OSM_db() {
   DB osm_stop_times
   LOG "OSM_db fin"
 }
-#F GTFS_db: les données de Kéolis en version spatialite
-GTFS_db() {
-  LOG "GTFS_db debut"
-  DB routes
-  DB routes_additionals
-  DB trips
-  DB stops
-  DB AddGeometryColumn stops geom2154 2154
-  DB stop_times
-  DB keolis_stops
-  DB keolis_stops_lignes
-  DB keolis_iti
-  DB keolis_trip
-  LOG "GTFS_db fin"
-}
+
 
 #F BUS_STOP: les arrets de bus d'illenoo
 BUS_STOP() {

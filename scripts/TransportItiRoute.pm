@@ -106,6 +106,8 @@ sub valid_relation_ways {
   my $nodes = $self->{nodes};
   my $ways = $self->{ways};
   my $osm = $self->{osm};
+  my $r =  $osm->{'relation'}[0];
+  warn "user: " . $r->{user} . ' timestamp:' . $r->{timestamp};
 #  confess Dumper $ways;
 #  confess Dumper $osm->{'relation'}[0]->{'member'};
   my $members = $osm->{'relation'}[0]->{'member'};
@@ -146,6 +148,9 @@ sub valid_relation_ways {
     };
 #    exit;
     if ( $member->{type} eq 'way' ) {
+      if ( $member->{role} =~ m{^(stop|platform|stop_entry_only|platform_entry_only|stop_exit_only|platform_exit_only)$} ) {
+        next;
+      }
 #      warn $member->{ref};
       my $w = $member->{ref};
 #      warn Dumper $ways->{$w}->{'nodes'};

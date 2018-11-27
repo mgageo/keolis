@@ -25,20 +25,19 @@ sub star_nodes_stops_old {
     $josm .= ',n' . $node->{id};
   }
 #  $self->{oAPI}->changeset($osm_delete, $self->{source}, 'delete');
-  warn$josm;
+  warn $josm;
 }
 #
 # pour les stops : différence entre osm et l'open data
 #
 #  ref:FR:STAR =
-# perl scripts/keolis.pl --DEBUG 0 --DEBUG_GET 0 star star_nodes_stops_diff
+# perl scripts/keolis.pl --DEBUG 0 --DEBUG_GET 1 star star_nodes_stops_diff
 sub star_nodes_stops_diff {
   my $self = shift;
   warn "star_nodes_stops_diff() debut";
-  my $table = 'star_pointsarret';
+  my $table = 'star_pointsarret_stop';
   my $network = $self->{network};
   my $hash_node = $self->{oOAPI}->osm_get("node['public_transport'='platform']['name']['$self->{k_ref}'];out meta;", "$self->{cfgDir}/star_relations_platform.osm");
-  my $hash_stop = $self->{oOAPI}->osm_get("node(area:3602005861)['highway'='bus_stop'];out meta;", "$self->{cfgDir}/star_relations_bus_stop.osm");
 
   $self->{oDB}->table_select($table, '', 'ORDER BY code');
 #
@@ -78,6 +77,7 @@ sub star_nodes_stops_diff {
   my $nb_modify = 0;
   my $josm = '';
   for my $ref ( sort keys %{$self->{stops}} ) {
+#    warn $ref;
     if ( defined $self->{stops}->{$ref}->{osm} && defined $self->{stops}->{$ref}->{star}) {
       my $node = $self->{stops}->{$ref}->{osm};
       my $star = $self->{stops}->{$ref}->{star};
@@ -92,9 +92,17 @@ sub star_nodes_stops_diff {
         $osm_modify .= $self->{oOSM}->modify_latlon($node_osm, $lat, $lon) . "\n";
       }
       if ( $node->{tags}->{name} ne $star->{nom} ) {
-        warn "n$node->{id} $node->{tags}->{name} ne $star->{nom}";
+#        warn "n$node->{id} $node->{tags}->{name} ne $star->{nom}";
 #        confess Dumper $self->{stops}->{$ref};
       }
+      next;
+    }
+  }
+  $self->{oAPI}->changeset($osm_modify, $self->{source}, 'modify');
+  return;
+  for my $ref ( sort keys %{$self->{stops}} ) {
+#    warn $ref;
+    if ( defined $self->{stops}->{$ref}->{osm} && defined $self->{stops}->{$ref}->{star}) {
       next;
     }
     if ( defined $self->{stops}->{$ref}->{osm} ) {
@@ -105,10 +113,22 @@ sub star_nodes_stops_diff {
       $josm .= ',n' . $node->{id};
       next;
     }
+  }
+# les arrêts inconnus d'osm
+  my $hash_stop = $self->{oOAPI}->osm_get("node(area:3602005861)['highway'='bus_stop'];out meta;", "$self->{cfgDir}/star_relations_bus_stop.osm");
+  for my $ref ( sort keys %{$self->{stops}} ) {
+    if ( defined $self->{stops}->{$ref}->{osm} && defined $self->{stops}->{$ref}->{star}) {
+      next;
+    }
+    if ( defined $self->{stops}->{$ref}->{osm} ) {
+      next;
+    }
     if ( $ref =~ m{^[4569]} ) {
       next;
     }
-    next;
+    warn $ref;
+# pour empecher la creation des nodes
+#    next;
 #    warn Dumper $self->{stops}->{$ref};
     my $coordonnees =  $self->{stops}->{$ref}->{star}->{coordonnees};
     warn "$ref $coordonnees";
@@ -131,13 +151,16 @@ sub star_nodes_stops_diff {
       id => $self->{stops}->{$ref}->{star}->{code},
       name => $self->{stops}->{$ref}->{star}->{nom},
     };
+    if (  $self->{stops}->{$ref}->{star}->{code} !~ m{^[0123]} ) {
+      next;
+    }
     my $osm = $self->star_node_stop_create($hash);
     $osm_create .=  $osm;
+    $nb_create++;
   }
   warn "star_nodes_stops_diff() difference nb_create:$nb_create nb_delete:$nb_delete nb_modify:$nb_modify";
-#  $self->{oAPI}->changeset($osm_create, 'maj Keolis aout 2018', 'create');
+  $self->{oAPI}->changeset($osm_create, 'maj Keolis 2018', 'create');
 #  $self->{oAPI}->changeset($osm_delete, $self->{source}, 'delete');
-  $self->{oAPI}->changeset($osm_modify, $self->{source}, 'modify');
   warn "josm:\n$josm";
 
 }
@@ -242,7 +265,6 @@ sub star_parcours_diff_parcours {
   my $parcours = shift;
   my $star = $parcours->{star};
   my $osm = $parcours->{osm};
-#  warn Dumper $parcours;
   my ( $desc, $from, $to);
   $desc = $star->{libellelong};
   ($from ) = ($desc =~ m{(^.*?)\s\-\>} );
@@ -272,6 +294,7 @@ sub star_parcours_diff_parcours {
     }
   }
   if ( $ko > 0 ) {
+#    confess Dumper $parcours;
     printf("%s r%s\n", $star->{id}, $osm->{id});
     $tags->{description} = xml_escape($tags->{description});
     my $xml = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $osm->{id}));
@@ -340,7 +363,7 @@ sub star_relations_stops_diff {
     }
     if ( ! defined $idlignes->{$idligne}->{'star'}) {
       printf("\t%s %s\n", "absente star");
-      confess;
+      next;
     }
     if ( defined $idlignes->{$idligne}->{'osm'} && defined $idlignes->{$idligne}->{'star'}) {
       $self->star_stops_diff_stops($idlignes->{$idligne});
@@ -362,7 +385,7 @@ sub star_stops_diff_stops {
   for my $stop ( @stops ) {
     my $id = $self->{stops}->{$stop};
     if ( $id !~ m{^\d+$} ) {
-      confess "star_stops_diff_stops() *** stop: $stop";
+      confess "star_stops_diff_stops() *** stop: $stop inconnu dans osm";
     }
     $osm_members .= '    <member type="node" ref="' . $id . '" role="platform"/>' . "\n";
   }
@@ -397,7 +420,7 @@ sub replace_relation_route_member_platform {
 #  warn $osm_members;
 
   my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $id));
-  if ( $relation_osm !~ m{role="platform"} ) {
+  if ( $relation_osm !~ m{role="(stop|platform)"} ) {
     confess '*** role="platform"' . $relation_osm;
   }
   my $relation_osm = get(sprintf("http://api.openstreetmap.org/api/0.6/%s/%s", 'relation', $id));

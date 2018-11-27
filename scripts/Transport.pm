@@ -16,8 +16,8 @@ use Osm;        # la base avec les données OSM et gtfs en provenance de la star
 sub new {
   my( $class, $attr ) = @_;
   my $self = {};
-  $self->{cfgDir} = "KEOLIS";
-  $self->{osm_commentaire} = 'maj Keolis novembre 2014';
+  $self->{cfgDir} = "TRANSPORT";
+  $self->{osm_commentaire} = 'maj novembre 2018';
   $self->{seuil} = 200;
 #  confess  Dumper $attr;
   bless($self, $class);
@@ -32,6 +32,7 @@ sub new {
     $self->{oAPI}->{$key} = $value;
     $self->{oOAPI}->{$key} = $value;
   }
+  $self->{oOSM}->{self} = $self;
   if ( not defined $self->{'tag_stop'} ) {
     my $network = $self->{network};
     $network =~ s{^fr_}{};
@@ -40,6 +41,7 @@ sub new {
   if ( not defined $self->{'tag'} ) {
     ($self->{tag}) = ( $self->{'tag_ref'} =~ m{(ref:\w+)} );
   }
+  $self->config();
   return $self;
 }
 sub DESTROY {
@@ -48,6 +50,20 @@ sub DESTROY {
   $self->SUPER::DESTROY if $self->can("SUPER::DESTROY");
   warn "DESTROY()";
   print $self->{log};
+}
+sub config {
+  my $self = shift;
+  my $file = "scripts/transport.dmp";
+  if ( -f $file ) {
+    open my $fh, '<', $file or die "in() open $file erreur:$!";
+    local $/ = undef;  # read whole file
+    my $dumped = <$fh>;
+    close $fh or die "new() $file erreur:$!";
+#  confess Dumper $dumped;
+    my %id =  %{eval $dumped};
+    $self->{config} = \%id;
+#    confess Dumper $self->{config};
+  }
 }
 #
 # récupération des données fichiers
@@ -342,13 +358,26 @@ sub tri_ref {
     $aa cmp $bb;
   }
 }
+sub tri_tags_network {
+  my $aa = $a->{tags}->{network};
+  my $bb = $b->{tags}->{network};
+  if ( $aa eq $bb ) {
+    tri_tags_ref()
+  } else {
+    $aa cmp $bb;
+  }
+}
 sub tri_tags_ref {
   my $aa = $a->{tags}->{ref};
   my $bb = $b->{tags}->{ref};
-  my ($an) = $aa =~ /^(\d+)/;
-  my ($bn) = $bb =~ /^(\d+)/;
+  my ($an, $as) = $aa =~ /^(\d+)(.*)$/;
+  my ($bn, $bs) = $bb =~ /^(\d+)(.*)$/;
   if ( $an && $bn ) {
-    $an <=> $bn;
+    if ( $an == $bn ) {
+      $as cmp $bs;
+    } else {
+      $an <=> $bn;
+    }
   } else {
     $aa cmp $bb;
   }

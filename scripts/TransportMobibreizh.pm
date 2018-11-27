@@ -134,6 +134,18 @@ sub mobibreizh_get_node {
   my $dsn = "$self->{cfgDir}/MOBIBREIZH/". $node->{id} . '.html';
   mirror($url, $dsn)
 }
+# les arrêts autour d'un stop gtfs
+sub mobibreizh_get_stop {
+  my $self = shift;
+  warn "mobibreihz_get_stop() debut";
+  my ($stop) = @_;
+#  confess Dumper $node;
+  my $url = 'http://www.breizhgo.com/fr/proximity/result/?proximity_search[uri][autocomplete-hidden]=' . $stop->{stop_lon} . '%3B' . $stop->{stop_lat} . '&proximity_search[distance]=400';
+  warn $url;
+  my $dsn = "$self->{cfgDir}/MOBIBREIZH/". $stop->{stop_id} . '.html';
+  $dsn =~ s/\:/_/;
+  mirror($url, $dsn)
+}
 #
 # pour récupérer les arrêts dans les fichiers html
 sub mobibreizh_parse {
@@ -152,14 +164,17 @@ sub mobibreizh_parse {
 #  warn Dumper $self->{stop_point};
   my $dsn = "$self->{cfgDir}/mobibreizh.dmp";
   store( $self->{stop_point}, $dsn );
-  warn "nb: " . scalar(keys %{$self->{stop_point}})
+  warn "dsn: $dsn";
+  warn "nb: " . scalar(keys %{$self->{stop_point}});
+  return $self->{stop_point};
 }
 sub mobibreizh_stop_lit {
   my $self = shift;
   use Storable;
   my $dsn = "$self->{cfgDir}/mobibreizh.dmp";
   $self->{stop_point} = retrieve( $dsn );
-  warn "nb: " . scalar(keys %{$self->{stop_point}})
+  warn "nb: " . scalar(keys %{$self->{stop_point}});
+  return $self->{stop_point};
 }
 sub mobibreizh_parse_node {
   use JSON qw( decode_json );
