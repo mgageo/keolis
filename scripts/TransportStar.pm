@@ -51,7 +51,7 @@ sub star_nodes_stops_diff {
     }
     if ( $ref !~ m{^\d+$} ) {
       warn "star_relations_stops_diff() indexation osm k_ref non numérique";
-#        warn Dumper $node;
+#      warn Dumper $node;
       next;
     }
     if ( defined $self->{stops}->{$ref}->{osm} ) {

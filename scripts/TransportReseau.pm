@@ -8,6 +8,7 @@ use utf8;
 use strict;
 use Carp;
 use Data::Dumper;
+use Encode;
 use Spreadsheet::ParseExcel;
 use Spreadsheet::ParseExcel::Utility qw(ExcelFmt);
 use WWW::Mechanize qw();
@@ -39,12 +40,14 @@ sub reseau {
     warn "key: $key";
     $self->{cfgDir} .= '/' . uc($key);
     $self->{reseau} = $key;
-    for my $iC (1..10) {
+    for my $iC (1..11) {
       $oWkC = $oWkS->{Cells}[$iR][$iC];
       if ( ! $oWkC ) {
         next;
       }
+      warn $oWkC->encoding();
       my $v = $oWkC->value();
+      $v = Encode::encode_utf8($v);
       $oWkC = $oWkS->{Cells}[0][$iC];
       my $k = $oWkC->value();
       if ( $k =~ m{_id$} ) {
